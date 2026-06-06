@@ -21,8 +21,10 @@ class GeofencingSchema(BaseModel):
     radius_meter: float
 
 # Schema untuk Sistem Keamanan
-class KeamananSchema(BaseModel):
-    status_keamanan: str  # misal: "Aktif" atau "Nonaktif"
+class SistemKeamananSchema(BaseModel):
+    anti_mock_gps: str
+    emulator_detection: str
+    root_check: str
 
 
 # ==========================================
@@ -151,19 +153,34 @@ def update_geofencing(data: GeofencingSchema):
 # ENDPOINT SISTEM KEAMANAN (Dinamis)
 # ==========================================
 
+# ==========================================
+# ENDPOINT KEAMANAN SISTEM (FIX FULL COLUMNS)
+# ==========================================
+
 @app.get("/sistem-keamanan")
-def get_status_keamanan():
+def get_sistem_keamanan():
     conn = get_db_connection()
     if not conn:
         raise HTTPException(status_code=500, detail="Gagal terhubung ke database cloud")
         
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT * FROM sistem_keamanan ORDER BY id DESC LIMIT 1")
+        # Kita ambil data dari baris ID = 2 sesuai database kamu
+        cursor.execute("SELECT * FROM sistem_keamanan WHERE id = 2")
         result = cursor.fetchone()
+        
         if not result:
-            return {"status_keamanan": "Aktif"}
-        return result
+            return {
+                "anti_mock_gps": "Aktif",
+                "emulator_detection": "Nonaktif",
+                "root_check": "Nonaktif"
+            }
+            
+        return {
+            "anti_mock_gps": result.get("anti_mock_gps", "Aktif"),
+            "emulator_detection": result.get("emulator_detection", "Nonaktif"),
+            "root_check": result.get("root_check", "Nonaktif")
+        }
     except Error as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -171,21 +188,27 @@ def get_status_keamanan():
         conn.close()
 
 @app.post("/sistem-keamanan/update")
-def update_status_keamanan(data: KeamananSchema):
+def update_sistem_keamanan(data: SistemKeamananSchema):
     conn = get_db_connection()
     if not conn:
         raise HTTPException(status_code=500, detail="Gagal terhubung ke database cloud")
         
     cursor = conn.cursor()
+    # 👉 QUERY FIX: Menembak 3 kolom sekaligus dan mengunci ke ID = 2
     query = """
-        INSERT INTO sistem_keamanan (id, status_keamanan) 
-        VALUES (1, %s) 
-        ON DUPLICATE KEY UPDATE status_keamanan=%s
+        INSERT INTO sistem_keamanan (id, anti_mock_gps, emulator_detection, root_check) 
+        VALUES (2, %s, %s, %s) 
+        ON DUPLICATE KEY UPDATE 
+        anti_mock_gps = %s, 
+        emulator_detection = %s, 
+        root_check = %s
     """
+    values = (data.anti_mock_gps, data.emulator_detection, data.root_check,
+              data.anti_mock_gps, data.emulator_detection, data.root_check)
     try:
-        cursor.execute(query, (data.status_keamanan, data.status_keamanan))
+        cursor.execute(query, values)
         conn.commit()
-        return {"status": "success", "message": "Status keamanan berhasil diubah di cloud"}
+        return {"status": "success", "message": "Konfigurasi keamanan berhasil diperbarui di cloud"}
     except Error as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
