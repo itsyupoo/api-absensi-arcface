@@ -215,3 +215,39 @@ def update_sistem_keamanan(data: SistemKeamananSchema):
     finally:
         cursor.close()
         conn.close()
+
+# ==========================================
+# ENDPOINT PRESENSI SISWA (FIX STRUCTURE)
+# ==========================================
+
+# Schema baru disesuaikan dengan kolom tabel catatan_kehadiran
+class PresensiSchema(BaseModel):
+    id_siswa: int
+    jarak_geo: float
+    status_kehadiran: str  # Hadir / Terlambat
+    distance: float        # Nilai threshold kemiripan wajah ArcFace
+
+@app.post("/presensi/hadir")
+def catat_presensi(data: PresensiSchema):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Gagal terhubung ke database cloud")
+        
+    cursor = conn.cursor()
+    # Query disesuaikan dengan kolom: id_siswa, waktu_absen, jarak_geo, status_kehadiran, distance
+    # waktu_absen diisi otomatis oleh server cloud menggunakan NOW() (tanggal + jam seketika)
+    query = """
+        INSERT INTO catatan_kehadiran (id_siswa, waktu_absen, jarak_geo, status_kehadiran, distance) 
+        VALUES (%s, NOW(), %s, %s, %s)
+    """
+    values = (data.id_siswa, data.jarak_geo, data.status_kehadiran, data.distance)
+    try:
+        cursor.execute(query, values)
+        conn.commit()
+        return {"status": "success", "message": "Catatan kehadiran berhasil disimpan di cloud MySQL!"}
+    except Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
