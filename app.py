@@ -105,7 +105,7 @@ def get_geofencing():
         
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT * FROM komfigurasi_geofencing ORDER BY id DESC LIMIT 1")
+        cursor.execute("SELECT * FROM konfigurasi_geofencing ORDER BY id DESC LIMIT 1")
         result = cursor.fetchone()
         if not result:
             return {"latitude_sekolah": -2.9602, "longitude_sekolah": 104.7554, "radius_meter": 50.0}
@@ -128,7 +128,7 @@ def update_geofencing(data: GeofencingSchema):
         
     cursor = conn.cursor()
     query = """
-        INSERT INTO komfigurasi_geofencing (id, latitude, longitude, radius) 
+        INSERT INTO konfigurasi_geofencing (id, latitude, longitude, radius) 
         VALUES (1, %s, %s, %s) 
         ON DUPLICATE KEY UPDATE 
         latitude=%s, longitude=%s, radius=%s
