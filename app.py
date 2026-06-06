@@ -109,7 +109,11 @@ def get_geofencing():
         result = cursor.fetchone()
         if not result:
             return {"latitude_sekolah": -2.9602, "longitude_sekolah": 104.7554, "radius_meter": 50.0}
-        return result
+        return {
+            "latitude_sekolah": result.get("latitude"),
+            "longitude_sekolah": result.get("longitude"),
+            "radius_meter": result.get("radius")
+        }
     except Error as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -124,10 +128,10 @@ def update_geofencing(data: GeofencingSchema):
         
     cursor = conn.cursor()
     query = """
-        INSERT INTO komfigurasi_geofencing (id, latitude_sekolah, longitude_sekolah, radius_meter) 
+        INSERT INTO komfigurasi_geofencing (id, latitude, longitude, radius) 
         VALUES (1, %s, %s, %s) 
         ON DUPLICATE KEY UPDATE 
-        latitude_sekolah=%s, longitude_sekolah=%s, radius_meter=%s
+        latitude=%s, longitude=%s, radius=%s
     """
     values = (data.latitude_sekolah, data.longitude_sekolah, data.radius_meter,
               data.latitude_sekolah, data.longitude_sekolah, data.radius_meter)
