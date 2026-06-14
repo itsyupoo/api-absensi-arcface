@@ -16,14 +16,24 @@ def main(page: ft.Page):
     page.bgcolor = "#FFFFFF"
     page.padding = 0
     
-    page.theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            primary="#4F55F7",
-            secondary="#4F55F7",
-            surface="#FFFFFF",
-            background="#FFFFFF",
-            error="#F75F5F",
-        ),
+    # ── PENGAMAN LAYOUT ADAPTIF & RESPONSIF HP/LAPTOP ──
+    # Jika lebar layar terdeteksi kecil (misal di bawah 600px seperti HP Android)
+    if page.width < 600:
+        # Mengompakkan jarak/padding bawaan seluruh komponen Flet
+        page.theme = ft.Theme(visual_density=ft.VisualDensity.COMPACT)
+        # Melakukan zoom-out global sebesar 15% agar teks raksasa menyusut otomatis
+        page.zoom = 0.85 
+    else:
+        # Tampilan normal jika dibuka lewat layar lebar Laptop
+        page.theme = ft.Theme(visual_density=ft.VisualDensity.STANDARD)
+        page.zoom = 1.0
+
+    # Menggabungkan skema warna primer/sekunder milikmu ke dalam tema
+    page.theme.color_scheme = ft.ColorScheme(
+        primary="#4F55F7",
+        secondary="#4F55F7",
+        surface="#FFFFFF",
+        error="#F75F5F",
     )
 
     # ── state global ──
@@ -62,7 +72,7 @@ def main(page: ft.Page):
                 state["current_tab_admin"] = tab
         page.route = route
         route_change()
-
+        
     page.on_route_change = route_change
     page.go("/login")
 
@@ -72,61 +82,78 @@ def main(page: ft.Page):
 # ─────────────────────────────────────────────────────
 def build_siswa_shell(page, state, go_to, active_tab=0):
     tabs = [
-        ("Beranda",   ft.Icons.HOME_ROUNDED,      SiswaDashboard),
-        ("Presensi",  ft.Icons.CAMERA_ALT_ROUNDED, SiswaPresensi),
-        ("Riwayat",   ft.Icons.LIST_ALT_ROUNDED,   SiswaRiwayat),
-        ("Profil",    ft.Icons.PERSON_ROUNDED,      SiswaProfil),
+        ("Beranda",  ft.Icons.HOME_ROUNDED,      SiswaDashboard),
+        ("Presensi", ft.Icons.CAMERA_ALT_ROUNDED, SiswaPresensi),
+        ("Riwayat",  ft.Icons.LIST_ALT_ROUNDED,   SiswaRiwayat),
+        ("Profil",   ft.Icons.PERSON_ROUNDED,    SiswaProfil),
     ]
 
     content_ref = ft.Ref[ft.Container]()
 
     def render_tab(idx):
-        ViewClass = tabs[idx][2]
-        return ViewClass(page, state, go_to).build()
+        try:
+            ViewClass = tabs[idx][2]
+            instance = ViewClass(page, state, go_to)
+            content = instance.build()
+            if content is None:
+                print(f"DEBUG: Error - Build mengembalikan None untuk tab {idx}")
+                return ft.Text("Gagal memuat konten")
+            return content
+        except Exception as e:
+            print(f"DEBUG: Error render_tab: {e}")
+            return ft.Container(content=ft.Text(f"Error: {e}"), bgcolor="red") # Biar kelihatan errornya
 
+    # --- MASUKKAN DI SINI (Ganti yang lama dengan ini) ---
     def on_tab_change(e):
-        state["current_tab_siswa"] = e.control.selected_index
-        content_ref.current.content = render_tab(e.control.selected_index)
-        page.update()
-
+        idx = e.control.selected_index
+        state["current_tab_siswa"] = idx
+                
+        if content_ref.current:
+            # Mengganti konten
+            content_ref.current.content = render_tab(idx)
+            # Update container agar layar refresh konten baru
+            content_ref.current.update() 
+            # Update page agar navigasi menyadari perubahan (opsional)
+            page.update()
+        else:
+            print("DEBUG: ERROR - Ref tidak ditemukan!")
+        
+    #!!!INI JANGAN DIUCAK-UCAKK KARNO NAVIGASI BAR BAWAHHNYOOO!!!!!!
     nav_bar = ft.NavigationBar(
         selected_index=active_tab,
         on_change=on_tab_change,
         bgcolor="#0D47A1",
-        indicator_color="#1C6BF4BE",
-        surface_tint_color="#0D47A1",
         destinations=[
             ft.NavigationBarDestination(
-                icon=ft.Icons.HOME_OUTLINED,
-                selected_icon=ft.Icons.HOME_ROUNDED,
-                label=t[0],
-            )
-            for t in tabs
+                icon=ft.Icons.HOME_OUTLINED, 
+                selected_icon=ft.Icons.HOME_ROUNDED, 
+                label=t[0]
+            ) for t in tabs
         ],
     )
 
+    # 2. Body (Gunakan expand=True agar mengisi ruang tersisa)
     body = ft.Container(
         ref=content_ref,
         content=render_tab(active_tab),
         expand=True,
     )
 
+    # 3. View dengan atribut navigasi bawaan
     return ft.View(
         route="/siswa",
         padding=0,
         bgcolor="#0D47A1",
+        navigation_bar=nav_bar, # <--- Pasang langsung di sini!
         controls=[
             ft.Column(
-                controls=[body, nav_bar],
-                expand=True,
-                spacing=0,
-            )
+                controls=[body],
+                expand=True, # <--- Ini yang penting agar body mengisi ruang
+            ),
         ],
     )
-
-
 # ─────────────────────────────────────────────────────
-#  ADMIN SHELL  (layout dengan NavigationRail sidebar)
+#  ADMIN SHELL  (layout dengan NavigationBar)
 # ─────────────────────────────────────────────────────
 def build_admin_shell(page, state, go_to, active_tab=0):
     tabs = [
@@ -147,41 +174,17 @@ def build_admin_shell(page, state, go_to, active_tab=0):
         content_ref.current.content = render_tab(e.control.selected_index)
         page.update()
 
-    rail = ft.NavigationRail(
-        selected_index=active_tab,
-        on_change=on_tab_change,
-        bgcolor="#0D47A1",
-        indicator_color="#1C6BF4BE",
-        min_width=64,
-        min_extended_width=180,
-        label_type=ft.NavigationRailLabelType.ALL,
-        destinations=[
-            ft.NavigationRailDestination(
-                icon=tabs[i][1],
-                selected_icon=tabs[i][1],
-                label=tabs[i][0],
-            )
-            for i in range(len(tabs))
-        ],
-        leading=ft.Container(
-            content=ft.Column(
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,spacing=4,
-                controls=[
-                    ft.Container(
-                        width=42, height=42, # Ukurannya sedikit diperbesar agar jelas
-                        border_radius=21,    # Membuatnya bulat sempurna (setengah dari width)
-                        border=ft.border.all(2, "#1C6BF4BE"), # Memberi bingkai biru tipis
-                        image=ft.DecorationImage(
-                            src="admin_photo.png", # Pastikan file ada di folder /assets
-                            fit=ft.ImageFit.COVER,
-                    ),
-                 ),
-                    ft.Text("Administrator", size=10, weight="bold", color="#FFFFFF"),
-                ],
-            ),
-            padding=ft.padding.only(top=16, bottom=8),
-        ),
-    )
+    nav_bar = ft.NavigationBar(
+            selected_index=active_tab,
+            on_change=on_tab_change,
+            bgcolor="#0D47A1", # Sesuaikan dengan warna tema kamu
+            destinations=[
+                ft.NavigationBarDestination(
+                    icon=tabs[i][1],
+                    label=tabs[i][0]
+                ) for i in range(len(tabs))
+            ],
+        )
 
     body = ft.Container(
         ref=content_ref,
@@ -194,14 +197,11 @@ def build_admin_shell(page, state, go_to, active_tab=0):
         route="/admin",
         padding=0,
         bgcolor="#3366FF",
-        controls=[
-            ft.Row(
-                controls=[rail, ft.VerticalDivider(width=1, color="#ffffff10"), body],
-                expand=True,
-                spacing=0,
-            )
-        ],
+        navigation_bar=nav_bar,
+        controls=[body],
     )
 
 
-ft.app(target=main)
+# Menjalankan server lokal agar bisa ditembak langsung via HP Android
+if __name__ == "__main__":
+        ft.app(target=main)

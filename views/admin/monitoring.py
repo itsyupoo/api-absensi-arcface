@@ -99,10 +99,10 @@ class AdminMonitoring:
             content=ft.Row(
                 controls=[
                     ft.Container(
-                        content=ft.Image(src=path_avatar,fit=ft.ImageFit.CONTAIN,width=24,height=24,
+                        content=ft.Image(src=path_avatar,fit="contain",width=24,height=24,
                         ),
                         width=35, height=35, bgcolor=C["surface2"], border_radius=8, 
-                        alignment=ft.alignment.center
+                        alignment="center"
                     ),
                     ft.Column([
                         ft.Text(nama, size=13, weight="bold", color=C["text"]),
@@ -112,8 +112,8 @@ class AdminMonitoring:
                     chip(status, cls_color)
                 ]
             ),
-            padding=ft.padding.symmetric(vertical=10),
-            border=ft.border.only(bottom=ft.BorderSide(1, C["border"]))
+            padding=ft.Padding(top=10, bottom=10, left=0, right=0),
+            border=ft.Border(bottom=ft.BorderSide(1, C["border"]))
         )
 
     def build(self) -> ft.Container:
@@ -126,7 +126,7 @@ class AdminMonitoring:
             prefix_icon=ft.Icons.SEARCH,
             on_change=lambda e: self._load_data_to_ui(e.control.value),
             bgcolor=C["surface2"], border_color=C["border2"], focused_border_color=C["blue"], color=C["text"],  hint_style=ft.TextStyle(color=C["text3"]),
-            border_radius=8, content_padding=ft.padding.symmetric(horizontal=12, vertical=8), expand=True)
+            border_radius=8, content_padding=ft.Padding(left=12, right=12, top=8, bottom=8), expand=True)
 
         log_card = ft.Container(
             content=ft.Column(
@@ -153,7 +153,7 @@ class AdminMonitoring:
                                 border_color=C["border2"],
                                 border_radius=8,
                                 width=120,
-                                content_padding=ft.padding.symmetric(horizontal=10, vertical=0),
+                                content_padding=ft.Padding(left=10, right=10, top=0, bottom=0),
                             ),
                         ],
                         spacing=8,
@@ -166,7 +166,7 @@ class AdminMonitoring:
             border_radius=12,
             border=ft.border.all(1, C["border"]),
             padding=16,
-            margin=ft.margin.only(bottom=12),
+            margin=ft.Margin(bottom=12),
         )
 
         total_hari_ini = hitung_wa_terkirim_hari_ini()
@@ -199,7 +199,7 @@ class AdminMonitoring:
             border_radius=12,
             border=ft.border.all(1, C["border"]),
             padding=16,
-            margin=ft.margin.only(bottom=12),
+            margin=ft.Margin(bottom=12),
         )
 
         return ft.Container(
@@ -212,8 +212,9 @@ class AdminMonitoring:
                             ],
                         ),
                         bgcolor=C["surface"],
-                        border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-                        padding=ft.padding.symmetric(horizontal=16, vertical=12),
+                        border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+                        padding=ft.Padding(left=16, right=16, top=40, bottom=12),
+                        width=float("inf")
                     ),
                     ft.Container(
                         content=ft.Column(
@@ -233,19 +234,19 @@ class AdminMonitoring:
                                     bgcolor="#0D47A1",
                                     border_radius=12,
                                     border=ft.border.all(1, f"{C['red']}40" if "red" in C else "#D32F2F"),
-                                    padding=ft.padding.symmetric(vertical=13),
+                                    padding=ft.Padding(top=13, bottom=13, right=0, left=0),
                                     
                                     # 👉 PANGGIL FUNGSI LOGOUT KAMU DI SINI:
                                     on_click=self.handle_logout,
 
                                     ink=True,
-                                    margin=ft.margin.only(bottom=24),
+                                    margin=ft.Margin(bottom=24),
                                 ),
                             ],
                             spacing=0, scroll=ft.ScrollMode.AUTO,
                         ),
                         expand=True,
-                        padding=ft.padding.symmetric(horizontal=14),
+                        padding=ft.Padding(left=14, right=14, top=0, bottom=0),
                     ),
                 ],
                 spacing=0,

@@ -35,7 +35,7 @@ class AdminSettings:
     def _field(self, label, value="", hint="", ref=None, on_change=None):
         return ft.Column(
             controls=[
-                ft.Text(label.upper(), size=10, weight=ft.FontWeight.W_700, color=C["text2"]),
+                ft.Text(label.upper(), size=8, weight=ft.FontWeight.W_700, color=C["text2"]),
                 ft.TextField(
                     ref=ref,
                     value=str(value), # Dipastikan dikonversi menjadi string
@@ -45,15 +45,12 @@ class AdminSettings:
                     border_color=C["border2"],
                     focused_border_color=C["blue"],
                     color=C["text"],
-                    hint_style=ft.TextStyle(color=C["text3"]),
+                    text_size=13,
                     border_radius=8,
-                    content_padding=ft.padding.symmetric(
-                        horizontal=12, vertical=8
-                    ),
+                    content_padding=ft.Padding(left=10, right=10, top=6, bottom=6),
                 ),
             ],
-            spacing=4,
-            expand=True,
+            spacing=2,
         )
 
     def _action_btn(self, label, color, on_click):
@@ -66,9 +63,10 @@ class AdminSettings:
             border_radius=9,
             border=ft.border.all(
                 1,
-                C["border2"] if color == "ghost" else f"{C.get(color, C['blue'])}40",
+                C["border2"] 
+                if color == "ghost" else f"{C.get(color, C['blue'])}40",
             ),
-            padding=ft.padding.symmetric(horizontal=14, vertical=10),
+            padding=ft.Padding(left=14, right=14, top=10, bottom=10),
             on_click=on_click,
             ink=True,
             expand=True,
@@ -129,11 +127,15 @@ class AdminSettings:
         self.page.update()
 
     def proses_simpan_keamanan(self, e=None):
-        """MENGUBAH TEMBAKAN: Mengirim data status keamanan baru ke API Railway Cloud"""
-        anti_mock = self.ref_mock_mode.current.value # Menggunakan status MOCK GPS dari Dropdown
+        """MENGUBAH TEMBAKAN: Mengirim data 3 dropdown keamanan sekaligus ke Cloud"""
+        anti_mock = self.ref_mock_mode.current.value      # Dropdown MOCK GPS
+        emulator = self.ref_emulator_mode.current.value   # Dropdown Emulator
+        root_check = self.ref_root_mode.current.value
         
         payload = {
-            "status_keamanan": anti_mock  # "Aktif" atau "Nonaktif"
+            "anti_mock_gps": anti_mock,
+            "emulator_detection": emulator,
+            "root_check": root_check
         }
         
         try:
@@ -157,6 +159,10 @@ class AdminSettings:
         geo_rad = "50"
         status_keamanan_val = "Aktif"
 
+        anti_mock_val = "Aktif"
+        emulator_val = "Nonaktif"
+        root_val = "Nonaktif"
+
         try:
             # 1. Ambil data geofencing dari Cloud
             response_geo = requests.get(f"{BASE_URL}/geofencing", timeout=5)
@@ -170,7 +176,9 @@ class AdminSettings:
             response_sec = requests.get(f"{BASE_URL}/sistem-keamanan", timeout=5)
             if response_sec.status_code == 200:
                 data_sec = response_sec.json()
-                status_keamanan_val = data_sec.get("status_keamanan", "Aktif")
+                anti_mock_val = data_sec.get("anti_mock_gps", "Aktif")
+                emulator_val = data_sec.get("emulator_detection", "Nonaktif")
+                root_val = data_sec.get("root_check", "Nonaktif")
         except Exception as e:
             print(f"⚠️ Gagal load data dari cloud awal, menggunakan default: {e}")
 
@@ -179,66 +187,47 @@ class AdminSettings:
 
         # ── Geofencing card ──
         geo_card = ft.Container(
-            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16, margin=ft.margin.only(bottom=12),
+            bgcolor=C["surface"], 
+            border_radius=12,
+            padding=16,
+            margin=ft.Margin(bottom=12),
             content=ft.Column(
-                spacing=12,
+                spacing=10,
                 controls=[
                     section_title("📍 Konfigurasi Geofencing"),
+                    # Pembungkus Peta
                     ft.Container(
-                        alignment=ft.alignment.center,
-                        bgcolor=C["surface2"],
-                        border_radius=10,
-                        border=ft.border.all(1, C["border"]),
-                        height=280, padding=10,
-                        content=ft.Column(
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            controls=[
-                                ft.Image(
-                                    ref=self.ref_map_img,
-                                    src=f"https://static-maps.yandex.ru/1.x/?lang=en_US&ll={geo_lng},{geo_lat}&z=16&l=map&pt={geo_lng},{geo_lat},pm2rdm", 
-                                    width=550, height=250, fit=ft.ImageFit.CONTAIN, border_radius=10, 
-                                 ),
-                            ],
+                        height=180, # Tinggi tetap
+                        border_radius=8,
+                        clip_behavior=ft.ClipBehavior.HARD_EDGE, # Penting agar gambar tidak keluar kotak
+                        content=ft.Image(
+                            ref=self.ref_map_img,
+                            src=f"https://static-maps.yandex.ru/1.x/?lang=en_US&ll={geo_lng},{geo_lat}&z=16&l=map&pt={geo_lng},{geo_lat},pm2rdm",
+                            fit="cover", # Memastikan gambar mengisi 180px tersebut
+                            width=float("inf"),    # Memastikan lebar penuh
+                            height=120,            # Memastikan tinggi penuh
                         ),
                     ),
-                    
-                    # Row Latitude & Longitude
-                    ft.Row(
+                    # Pembungkus Form (Tadinya biru)
+                    ft.Column(
+                        spacing=10,
                         controls=[
-                            self._field("Latitude", geo_lat, ref=self.ref_lat, on_change=self._update_map_realtime),
-                            ft.Container(width=10),
-                            self._field("Longitude", geo_lng, ref=self.ref_lng, on_change=self._update_map_realtime),
-                        ],
-                    ),
-
-                    ft.Container(height=8),
-
-                    # Row Radius & Mock GPS
-                    ft.Row(
-                        controls=[
+                            ft.Row([
+                                self._field("Latitude", geo_lat, ref=self.ref_lat, on_change=self._update_map_realtime),
+                                self._field("Longitude", geo_lng, ref=self.ref_lng, on_change=self._update_map_realtime),
+                            ]),
                             self._field("Radius (meter)", geo_rad, ref=self.ref_radius),
-                            ft.Container(width=10),
-                            ft.Column(
-                                expand=True, spacing=4,
-                                controls=[
-                                    ft.Text("MOCK GPS".upper(), size=10, weight=ft.FontWeight.W_700, color=C["text2"]),
-                                    ft.Dropdown(
-                                        ref=self.ref_mock_mode,
-                                        options=[ft.dropdown.Option("Aktif"), ft.dropdown.Option("Nonaktif")],
-                                        value=status_keamanan_val, bgcolor=C["surface2"], border_radius=8, color=C["text"],
-                                        content_padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                                    ),
-                                ],
-                            ),
-                        ],
+                            self._action_btn("💾 Simpan Geofencing", "blue", self.proses_simpan_geo),
+                        ]
                     ),
-                    self._action_btn("💾 Simpan Geofencing", "blue", self.proses_simpan_geo),
                 ],
             ),
         )
-
+                    
+        
         wa_card = ft.Container(
-            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16, margin=ft.margin.only(bottom=12),
+            bgcolor=C["surface"], border_radius=12, border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])),
+            padding=16, margin=ft.Margin(bottom=12),
             content=ft.Column(
                 controls=[
                     ft.Row([section_title("📱 WhatsApp Gateway"), chip(status_device, warna_chip)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
@@ -251,7 +240,7 @@ class AdminSettings:
                         bgcolor=C["surface2"],
                         padding=10,
                         border_radius=8,
-                        border=ft.border.all(1, C["border2"])
+                        border=ft.Border(left=ft.BorderSide(1, C["border2"]), top=ft.BorderSide(1, C["border2"]), right=ft.BorderSide(1, C["border2"]), bottom=ft.BorderSide(1, C["border2"]))
                     ),
                     ft.Container(height=10),
                     ft.Column([
@@ -265,40 +254,90 @@ class AdminSettings:
         )
     
         sec_card = ft.Container(
-            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16, margin=ft.margin.only(bottom=12),
+            bgcolor=C["surface"], border_radius=12, border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])), 
+            padding=15, margin=ft.Margin(bottom=12),
             content=ft.Column(
-                spacing=15,
+                spacing=12,
                 controls=[
                     section_title("🛡️ Keamanan Sistem"),
-                    ft.Row([
-                        ft.Text("Emulator Detection", expand=True, color=C["text2"]),
-                        ft.Dropdown(ref=self.ref_emulator_mode, options=[ft.dropdown.Option("Aktif"), ft.dropdown.Option("Nonaktif")], 
-                                    value="Aktif", width=120, bgcolor=C["surface2"], color=C["text"])
-                    ]),
-                    ft.Row([
-                        ft.Text("Root/Jailbreak Check", expand=True, color=C["text2"]),
-                        ft.Dropdown(ref=self.ref_root_mode, options=[ft.dropdown.Option("Aktif"), ft.dropdown.Option("Nonaktif")], 
-                                    value="Aktif", width=120, bgcolor=C["surface2"], color=C["text"])
-                    ]),
-                    ft.Divider(color=C["border"]),
+                    ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Text("Emulator Detection", color=C["text2"], size=15
+                    ),
+                    ft.Dropdown(
+                        ref=self.ref_emulator_mode, 
+                        options=[ft.dropdown.Option("Aktif"), ft.dropdown.Option("Nonaktif")], 
+                        value="Aktif", 
+                        width=100, # Sedikit lebih lebar agar teks tidak terpotong
+                        text_size=12,
+                        content_padding=ft.Padding(left=8, top=0, bottom=0, right=8), # Mengatur posisi teks di dlm dropdown
+                        bgcolor=C["surface2"], 
+                        color=C["text"],
+                        border_radius=6,
+                        dense=True,
+                        border_width=1
+                    )
+                ]
+            ),
+            
+            # Row Root
+            ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Text("Root/Jailbreak Check", color=C["text2"], size=15),
+                    ft.Dropdown(
+                        ref=self.ref_root_mode, 
+                        options=[ft.dropdown.Option("Aktif"), ft.dropdown.Option("Nonaktif")], 
+                        value="Aktif", 
+                        width=100,  
+                        text_size=12,
+                        content_padding=ft.Padding(left=8, top=0, bottom=0, right=8),
+                        bgcolor=C["surface2"], 
+                        color=C["text"],
+                        border_radius=6,
+                        dense=True,
+                        border_width=1
+                    )
+                ]
+            ),
+                    ft.Divider(color=C["border"], height=20),
                     self._action_btn("💾 Simpan Keamanan", "blue", self.proses_simpan_keamanan),
                 ],
             ),
         )
 
         return ft.Container(
-            expand=True, bgcolor=C["bg"],
+            expand=True,
+            bgcolor=C["bg"], 
+            padding=0,
             content=ft.Column(
-                controls=[
-                    ft.Container(
-                        content=ft.Text("Pengaturan", size=15, weight=ft.FontWeight.W_700, color=C["text"]),
-                        bgcolor=C["surface"], padding=16, border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-                    ),
-                    ft.Container(
-                        expand=True, padding=14,
-                        content=ft.Column([geo_card, wa_card, sec_card, ft.Container(height=20)], scroll=ft.ScrollMode.AUTO),
-                    ),
-                ],
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
                 spacing=0,
-            ),
+                controls=[
+                    # Header
+                    ft.Container(
+                        bgcolor=C["surface"],
+                        padding=ft.Padding(top=40, bottom=16, left=16, right=16), 
+                        border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+                        content=ft.Text("Pengaturan", size=19, weight=ft.FontWeight.W_700, color=C["text"], width=float("inf")),
+                    ),
+                    # Area konten utama
+                    ft.Container(
+                        expand=True, # Mendorong area ini mengisi sisa layar
+                        padding=ft.Padding(top=10, left=14, right=14, bottom=80),
+                        content=ft.ListView(
+                            spacing=12,
+                            controls=[
+                                geo_card, 
+                                wa_card, 
+                                sec_card, 
+                            ]
+                        ),
+                    ),
+                ]
+            )
         )

@@ -72,8 +72,8 @@ class AdminDataSiswa:
             content=ft.Row(
                 controls=[
                     ft.Container(
-                        content=ft.Image(src=path_logo, width=24, height=24, fit=ft.ImageFit.CONTAIN),
-                        width=36, height=36, bgcolor=C["surface2"], border_radius=10, alignment=ft.alignment.center
+                        content=ft.Image(src=path_logo, width=24, height=24, fit="contain"),
+                        width=36, height=36, bgcolor=C["surface2"], border_radius=10, alignment="center"
                     ),
                     ft.Column(controls=[
                         ft.Text(nama, size=13, weight=ft.FontWeight.W_700, color=C["text"]),
@@ -81,7 +81,7 @@ class AdminDataSiswa:
                     ], spacing=1, expand=True),
                 ]
             ),
-            margin=ft.margin.only(bottom=8)
+            margin=ft.Margin(bottom=8)
         )
     
     def filter_pencarian(self, e):
@@ -114,7 +114,7 @@ class AdminDataSiswa:
         self.page.update() 
         self.file_picker.pick_files(allow_multiple=True,file_type=ft.FilePickerFileType.IMAGE)
             
-    def handle_file_result(self, e: ft.FilePickerResultEvent):
+    def handle_file_result(self, e):
         """Menangani hasil pilihan foto dari galeri"""
         if e.files:
             jumlah_foto = len(e.files)
@@ -145,7 +145,7 @@ class AdminDataSiswa:
         # Matikan tombol agar tidak diklik berkali-kali saat proses
         e.control.disabled = True
         self.page.update()
-   
+
         self._snack("🤖 Memulai training... Mohon tunggu.", color="blue") 
         
         try:
@@ -236,7 +236,7 @@ class AdminDataSiswa:
                             section_title("👥 Daftar Siswa"),
                             ft.Container(
                                 content=ft.Text(f"{total_awal} Siswa", ref=self.count_text_ref, size=11, color="white", weight="bold"),
-                                bgcolor="blue", padding=ft.padding.symmetric(horizontal=8, vertical=2), border_radius=10
+                                bgcolor="blue", padding=ft.Padding(left=8, right=9, top=2, bottom=2), border_radius=10
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -245,7 +245,7 @@ class AdminDataSiswa:
                     ft.TextField(
                         hint_text="Cari nama atau NISN...",
                         bgcolor=C["surface2"], border_color=C["border2"], color=C["text"], border_radius=8,
-                        content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                        content_padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                         on_change=self.filter_pencarian),
                     ft.Container(height=10),
                     ft.Container(
@@ -267,7 +267,7 @@ class AdminDataSiswa:
      border_radius=12, 
      border=ft.border.all(1, C["border"]),
      padding=16, 
-     margin=ft.margin.only(bottom=12))
+     margin=ft.Margin(bottom=12))
 
         # ── Enrollment form card (BAGIAN PANJANG) ──
         def make_field(label, hint, ref):
@@ -277,7 +277,7 @@ class AdminDataSiswa:
                     ft.TextField(
                         ref=ref, hint_text=hint, bgcolor=C["surface2"], border_color=C["border2"],
                         color=C["text"], border_radius=8,
-                        content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                        content_padding=ft.Padding(left=12, right=12, top=8, bottom=8),
                     ),
                 ],
                 spacing=4, expand=True
@@ -289,7 +289,7 @@ class AdminDataSiswa:
                 content=ft.Text("✅" if self.photo_slots[i] else "📷", size=20),
                 width=52, height=52, border_radius=10,
                 bgcolor=C["blue_dim"] if self.photo_slots[i] else C["surface2"],
-                alignment=ft.alignment.center,
+                alignment="center",
             ) for i in range(5)
         ]
 

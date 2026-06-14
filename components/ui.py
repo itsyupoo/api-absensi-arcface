@@ -3,6 +3,13 @@
 
 import flet as ft
 
+if not hasattr(ft.border, "all"):
+    ft.border.all = lambda w, c: ft.Border(
+        left=ft.BorderSide(w, c),
+        top=ft.BorderSide(w, c),
+        right=ft.BorderSide(w, c),
+        bottom=ft.BorderSide(w, c)
+    )
 # ── Warna tema ──
 C = {
     "bg":         "#F5F5F5",
@@ -35,9 +42,14 @@ def chip(label: str, color: str = "blue") -> ft.Container:
         content=ft.Text(label, size=11, weight=ft.FontWeight.W_700, color=fg),
         bgcolor=bg,
         border_radius=99,
-        padding=ft.padding.symmetric(horizontal=10, vertical=3),
-        border=ft.border.all(1, f"{fg}40"),
-    )
+        padding=ft.Padding(left=10, top=3, right=10, bottom=3),
+        border=ft.Border(
+        left=ft.BorderSide(1, f"{fg}40"),
+        top=ft.BorderSide(1, f"{fg}40"),
+        right=ft.BorderSide(1, f"{fg}40"),
+        bottom=ft.BorderSide(1, f"{fg}40")
+    ),
+)    
 
 
 def section_title(text: str) -> ft.Text:
@@ -60,30 +72,29 @@ def card(content, padding=16) -> ft.Container:
         border_radius=12,
         border=ft.border.all(1, C["border"]),
         padding=padding,
-        margin=ft.margin.only(bottom=12),
+        margin=ft.Margin(left=0, top=0, right=0, bottom=12),
     )
 
 
 def stat_box(number: str, label: str, color: str = "blue", ref=None) -> ft.Container:
-    """Kotak statistik kecil."""
-    fg = C.get(color, C["blue"])
+    """Versi ultra-aman untuk debugging."""
+    # Pastikan 'C' sudah terdefinisi, atau ganti dengan warna hardcoded untuk tes
+    fg = "#0D47A1" 
+    
     return ft.Container(
         content=ft.Column(
             controls=[
-                ft.Text(number, ref=ref, size=26, weight=ft.FontWeight.W_800, color=fg),
-                ft.Text(label, size=11, color=C["text2"]),
+                ft.Text(value=number, size=22, weight=ft.FontWeight.BOLD, color=fg),
+                ft.Text(value=label, size=11, color="black"),
             ],
-            spacing=2,
+            spacing=0,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=C["surface2"],
+        bgcolor="white",
         border_radius=10,
-        border=ft.border.all(1, C["border"]),
-        padding=ft.padding.symmetric(horizontal=12, vertical=10),
+        padding=10,
         expand=True,
-        alignment=ft.alignment.center,
     )
-
 
 def primary_button(text: str, on_click=None, icon=None, disabled=False) -> ft.Container:
     """Tombol utama biru besar."""
@@ -106,7 +117,7 @@ def primary_button(text: str, on_click=None, icon=None, disabled=False) -> ft.Co
         ),
         bgcolor="#1A4BD4" if not disabled else C["surface3"],
         border_radius=12,
-        padding=ft.padding.symmetric(vertical=16),
+        padding=ft.Padding(top=16, bottom=16, left=0, right=0),
         on_click=on_click if not disabled else None,
         ink=True,
         shadow=ft.BoxShadow(
@@ -114,7 +125,7 @@ def primary_button(text: str, on_click=None, icon=None, disabled=False) -> ft.Co
             color="#4F8EF740",
             offset=ft.Offset(0, 6),
         ) if not disabled else None,
-        margin=ft.margin.only(bottom=12),
+        margin=ft.Margin(left=0, top=0, right=0, bottom=12),
     )
 
 
@@ -123,8 +134,8 @@ def secondary_button(text: str, on_click=None) -> ft.Container:
     return ft.Container(
         content=ft.Text(text, size=13, weight=ft.FontWeight.W_600, color=C["text2"]),
         border_radius=8,
-        border=ft.border.all(1, C["border2"]),
-        padding=ft.padding.symmetric(horizontal=14, vertical=8),
+        border=ft.Border(left=ft.BorderSide(1, C["border2"]),top=ft.BorderSide(1, C["border2"]),right=ft.BorderSide(1, C["border2"]),bottom=ft.BorderSide(1, C["border2"])),
+        padding=ft.Padding(left=14, right=14, top=8, bottom=8),
         on_click=on_click,
         ink=True,
     )
@@ -152,8 +163,8 @@ def topbar(title: str, subtitle: str = "", actions=None) -> ft.Container:
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         bgcolor=C["surface"],
-        border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-        padding=ft.padding.symmetric(horizontal=18, vertical=12),
+        border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+        padding=ft.Padding(left=18, right=18, top=12, bottom=12),
     )
 
 
@@ -173,13 +184,13 @@ def avatar(initials: str, size: int = 48) -> ft.Container:
         height=size,
         border_radius=size // 4,
         gradient=ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
+            begin="top_left", 
+            end="bottom_right",
             colors=["#1A3A6E", "#4F8EF7"],
 
         ),
 
-        alignment=ft.alignment.center,
+        alignment="center",
 
     )
 
@@ -207,8 +218,8 @@ def geo_indicator(inside: bool = True) -> ft.Container:
         bgcolor=bg,
         border_radius=8,
         border=ft.border.all(1, f"{color}30"),
-        padding=ft.padding.symmetric(horizontal=12, vertical=8),
-        margin=ft.margin.only(bottom=12),
+        padding=ft.Padding(left=12, right=12, top=8, bottom=8),
+        margin=ft.Margin(left=0, top=0, right=0, bottom=12)
     )
 
 
@@ -241,7 +252,7 @@ def wa_status_bar(active: bool = True, total_pesan: int = 0) -> ft.Container:
         bgcolor=C["green_dim"] if active else C["red_dim"],
         border_radius=10,
         border=ft.border.all(1, f"{color}30"),
-        padding=ft.padding.symmetric(horizontal=14, vertical=12),
+        padding=ft.Padding(left=14, right=14, top=12, bottom=12),
     )
 
 
@@ -264,11 +275,10 @@ def field_input(label: str, hint: str = "", password: bool = False,
                 color=C["text"],
                 hint_style=ft.TextStyle(color=C["text3"]),
                 border_radius=8,
-                content_padding=ft.padding.symmetric(horizontal=14, vertical=10),
+                content_padding=14,
             ),
         ],
         spacing=6,
-        expand=True,
     )
 
 
@@ -286,8 +296,8 @@ def info_row(key: str, value: str, value_color: str = None) -> ft.Container:
                 ),
             ],
         ),
-        border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-        padding=ft.padding.symmetric(vertical=9),
+        border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+        padding=ft.Padding(left=0, top=9, right=0, bottom=9),
     )
 
 

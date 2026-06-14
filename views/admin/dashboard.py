@@ -25,7 +25,6 @@ class AdminDashboard:
 
     def _buat_baris_tabel(self, nama, kelas, jam, status, jenis_kelamin):
         color = "green" if status == "Hadir" else "#FF0800"
-        init = nama[0] if nama else "?"
         
         if jenis_kelamin in ["L", "Laki-laki", "Laki-Laki"]:
             path_avatar = "logo_cowok.png"
@@ -36,18 +35,10 @@ class AdminDashboard:
             content=ft.Row(
                 controls=[
                     ft.Container(
-                       content=ft.Image(
-                            src=path_avatar,
-                            fit=ft.ImageFit.CONTAIN,
-                            width=24,
-                            height=24,
-                        ),
-                        width=30, 
-                        height=30, 
-                        bgcolor=C["surface2"],
-                        border_radius=8, 
-                        border=ft.border.all(1, C["border"]),
-                        alignment=ft.alignment.center,
+                       content=ft.Image(src=path_avatar,fit="contain",width=24,height=24),
+                        width=30, height=30, bgcolor=C["surface2"],border_radius=8, 
+                        border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])),
+                        alignment="center",
                     ),    
                     ft.Text(nama, size=12, weight=ft.FontWeight.W_700, color=C["text"], expand=True),
                     ft.Text(kelas, size=11, color=C["text2"], width=70),
@@ -57,8 +48,8 @@ class AdminDashboard:
                 spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-            padding=ft.padding.symmetric(vertical=9),
+            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+            padding=ft.Padding(0, 9, 0, 9),
         )
 
     async def update_dashboard_periodic(self):
@@ -138,26 +129,14 @@ class AdminDashboard:
                     db.close()
 
     def build(self) -> ft.Container:
-        # Jalankan background task
         self.page.run_task(self.update_dashboard_periodic)
         total_hari_ini = hitung_wa_terkirim_hari_ini()
-
-        # 1. Stats Row
-        stats_row = ft.Row(
-            controls=[
-                stat_box("0", "Total Siswa", "warn", ref=self.ref_total),
-                stat_box("0", "Hadir", "green", ref=self.ref_hadir),
-                stat_box("0", "Terlambat", "#FF0800", ref=self.ref_lambat),
-                stat_box("0", "Belum Absen", "#FF2400", ref=self.ref_belum),
-            ],
-            spacing=8,
-        )
 
         rekap_saat_ini = ambil_rekap_7_hari()
         nilai_tertinggi = max([row[1] for row in rekap_saat_ini]) if rekap_saat_ini else 0
         limit_grafik = max(nilai_tertinggi, 40)
         bars_controls = []
-
+    
         for i, (label, val) in enumerate(rekap_saat_ini):
             # Pastikan indeks i tidak melebihi jumlah ref yang sudah kita buat di __init__
             if i < len(self.ref_bars):
@@ -167,7 +146,9 @@ class AdminDashboard:
                         controls=[
                             ft.Text(str(val) if val > 0 else "", size=9, color=C["text2"], ref=self.ref_bar_texts[i]),
                             ft.Container(
-                                width=28, height=tinggi_batang,bgcolor=C["green"] if val > 0 else C["surface3"],border_radius=ft.border_radius.only(top_left=4, top_right=4),ref=self.ref_bars[i],animate_size=ft.Animation(600, ft.AnimationCurve.DECELERATE),
+                                width=28, height=tinggi_batang,bgcolor=C["green"] if val > 0 else C["surface3"],
+                                border_radius=ft.BorderRadius(top_left=4, top_right=4, bottom_left=0, bottom_right=0),
+                                ref=self.ref_bars[i],animate_size=ft.Animation(600, ft.AnimationCurve.DECELERATE),
                             ),
                             ft.Text(label, size=9, color=C["text3"]),
                         ],
@@ -192,49 +173,76 @@ class AdminDashboard:
                 ft.Container(height=12),
                 ft.Row(controls=bars_controls, alignment="spaceBetween", vertical_alignment="end"),
             ]),
-            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16
+            bgcolor=C["surface"], border_radius=12, 
+            border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])),
+            padding=16
         )
-
-        # 3. Recent Log Card (Menggunakan Ref agar bisa diupdate otomatis)
+         # 3. Recent Log Card (Menggunakan Ref agar bisa diupdate otomatis)
         recent_card = ft.Container(
-            content=ft.Column([
-                    ft.Row([
-                        section_title("📋 5 Presensi Terbaru"),
-                        ft.TextButton("Lihat Semua →", on_click=lambda e: self.go_to("/admin", tab=1)),
-                        ], alignment="spaceBetween"),
-                    ft.Container(height=8), ft.Column(ref=self.ref_list_presensi, spacing=0),
-                ],
+        content=ft.Column([
+            # Kita buat Row ini sepadat mungkin
+            ft.Row([
+                section_title("📋 Presensi Terbaru"),
+                ft.TextButton(
+                    "Lihat Semua →", 
+                    on_click=lambda e: self.go_to("/admin", tab=1),
+                    style=ft.ButtonStyle(text_style=ft.TextStyle(size=10))
+                ),
+            ], alignment="spaceBetween", vertical_alignment="center"), # Pastikan center vertikal
+            
+            ft.Column(
+                ref=self.ref_list_presensi, 
+                spacing=0,
+                margin=ft.Margin(top=-5) # Tarik list ke atas
             ),
-            bgcolor=C["surface"], border_radius=12, padding=16,
-            border=ft.border.all(1, C["border"]), margin=ft.margin.only(bottom=12),
-        )
+        ], spacing=0),
+        bgcolor=C["surface"], 
+        border_radius=12, 
+        padding=ft.Padding(16, 12, 16, 16), 
+        border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])),
+        margin=ft.Margin(bottom=12),
+    )
 
-        # 4. WhatsApp Card
+         # 4. WhatsApp Card
         wa_card = ft.Container(
             content=ft.Column([
                 section_title("📱 Gateway WhatsApp"), 
                 ft.Container(height=10),  
                 wa_status_bar(active=True, total_pesan=total_hari_ini),
             ]),
-            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16
+            bgcolor=C["surface"], border_radius=12, 
+            border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])), 
+            padding=16
         )
 
-        # RETURN UTAMA (Pastikan menjorok ke dalam method build)
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    # Header
+                    # 1. HEADER (Container dengan Row di dalamnya)
                     ft.Container(
                         content=ft.Row([
+                            ft.Container(
+                                width=50, height=50, border_radius=24,
+                                border=ft.border.all(1, "#1C6BF4BE"),
+                                image=ft.DecorationImage(src="admin_photo.png", fit="cover"),
+                                margin=ft.Margin(right=6)
+                            ),
                             ft.Column([
-                                ft.Text("Dashboard", size=15, weight="bold", color=C["text"]),
+                                ft.Text("Dashboard Administrator", size=15, weight="bold", color=C["text"]),
                                 ft.Text("Ringkasan hari ini", size=11, color=C["text2"]),
-                            ], expand=True),
-                            ft.Container(content=ft.Text("Export Sheets", size=11, weight= "bold", color="black"), padding=10, border=ft.border.all(1, "black"), border_radius=8, ink=True, on_click=self.proses_export_excel)
-                        ]),
-                        padding=16, bgcolor=C["surface"], border=ft.border.only(bottom=ft.BorderSide(1, C["border"]))
+                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=0, expand=True),
+                            ft.Container(
+                                content=ft.Text("Export", size=11, weight="bold", color="black"), 
+                                padding=10, border=ft.border.all(1, "black"), border_radius=8, 
+                                ink=True, on_click=self.proses_export_excel
+                            )
+                        ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        padding=ft.Padding(16, 45, 16, 16), 
+                        bgcolor=C["surface"], 
+                        border=ft.Border(bottom=ft.BorderSide(1, C["border"]))
                     ),
-                    # Body
+
+                    # 2. BODY (Ditaruh di sini agar berurutan secara vertikal)
                     ft.Container(
                         content=ft.Column([
                             ft.Container(height=4),
@@ -245,6 +253,9 @@ class AdminDashboard:
                         ], scroll=ft.ScrollMode.AUTO),
                         expand=True, padding=14
                     )
-                ], spacing=0
-            ), expand=True, bgcolor=C["bg"]
+                ], 
+                spacing=0
+            ), 
+            expand=True, 
+            bgcolor=C["bg"]
         )

@@ -4,12 +4,12 @@ import flet as ft
 import cv2
 import base64
 import math
-from components.ui import C, card, geo_indicator, chip
-from absen_engine import AbsenEngine
+import time
+import requests
+from datetime import datetime
+from components.ui import C, geo_indicator, chip
 import importlib
 import database_connect as db_conn
-
-
 importlib.reload(db_conn)
 
 STEPS = [
@@ -39,14 +39,17 @@ class SiswaPresensi:
         self.cam_sheet_ref = ft.Ref[ft.BottomSheet]()
         self.gps_text_ref = ft.Ref[ft.Text]()
         self.btn_absen_ref = ft.Ref[ft.Container]()
-        
+        self.camera_picker = ft.FilePicker(on_result=self.on_camera_result)
+        self.page.overlay.append(self.camera_picker)
         self.res_nama_ref = ft.Ref[ft.Text]()
         self.res_jam_ref = ft.Ref[ft.Text]()
         self.res_status_ref = ft.Ref[ft.Text]()
         self.res_lokasi_ref = ft.Ref[ft.Text]()
         self.res_wa_ref = ft.Ref[ft.Text]()
 
-        # Tambahkan ini di bagian __init__ atau sebelum mereturn Container di fungsi build()
+        self.lat_terakhir = 0.0
+        self.lon_terakhir = 0.0 
+               
         self.geolocator = ft.Geolocator(
             on_error=lambda e: print(f"Geolocator error: {e.data}")
         )
@@ -54,24 +57,16 @@ class SiswaPresensi:
             self.page.overlay.append(self.geolocator)
 
     def hitung_jarak_haversine(self, lat1, lon1, lat2, lon2):
-        """
-        Menghitung jarak antara dua koordinat dalam satuan meter
-        """
-        # Jari-jari bumi dalam meter
+        """Menghitung jarak antara dua koordinat dalam satuan meter"""
         R = 6371000.0 
-        
-        # Ubah derajat ke radian
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
         delta_phi = math.radians(lat2 - lat1)
         delta_lambda = math.radians(lon2 - lon1)
         
-        # Rumus Haversine
         a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        
-        jarak = R * c
-        return jarak # hasil dalam meter
+        return R * c
 
     def update_geo_ui(self):
         """Update tampilan indikator lokasi di dashboard"""
@@ -83,34 +78,27 @@ class SiswaPresensi:
             )
             self.page.update()
 
-    # ── Toggle lokasi (demo) ──
     def toggle_geo(self, e):
+        """Toggle lokasi (demo)"""
         self.is_fake_gps = not self.is_fake_gps
         
         if self.is_fake_gps:
-            # Skenario TERDETEKSI (Kunci Tombol)
             self.gps_text_ref.current.value = "✗ Terdeteksi"
             self.gps_text_ref.current.color = "red"
-            
             self.btn_absen_ref.current.disabled = True
-            self.btn_absen_ref.current.bgcolor = "grey", 400 # Ubah jadi abu-abu
+            self.btn_absen_ref.current.bgcolor = "grey"
             self.btn_text_ref.current.value = "🚫 Absen Terkunci (Fake GPS)"
-            
             msg = "⚠️ Peringatan: Aplikasi Pemalsu Lokasi Terdeteksi!"
             color = "red"
         else:
-            # Skenario AMAN (Buka Tombol)
             self.gps_text_ref.current.value = "✓ Aman"
             self.gps_text_ref.current.color = "green"
-            
             self.btn_absen_ref.current.disabled = False
-            self.btn_absen_ref.current.bgcolor = "#1A4BD4" # Kembali ke biru
+            self.btn_absen_ref.current.bgcolor = "#1A4BD4"
             self.btn_text_ref.current.value = "Ambil Foto & Verifikasi"
-            
             msg = "Sistem Keamanan: Lokasi Terverifikasi Asli"
             color = "green"
 
-        # Tampilkan Snackbar
         self.page.snack_bar = ft.SnackBar(
             content=ft.Text(msg),
             bgcolor=color,
@@ -119,36 +107,49 @@ class SiswaPresensi:
         self.page.snack_bar.open = True
         self.page.update()
 
-        # 3. Munculkan notifikasi di bawah
-        msg = "Peringatan: Pemalsuan Lokasi Terdeteksi!" if self.is_fake_gps else "Sistem Keamanan: Normal"
-        # Ganti ft.colors.RED jadi "red" dan ft.colors.GREEN jadi "green"
-        self.page.snack_bar = ft.SnackBar(ft.Text(msg),bgcolor="red" if self.is_fake_gps else "green"
-)
-        self.page.snack_bar.open = True
-        
-        self.page.update()
-
     def run_real_process(self, e):
-        # 1. Cek proteksi GPS (Fitur baru)
         if self.is_fake_gps:
             self.page.snack_bar = ft.SnackBar(ft.Text("Gagal: Matikan Fake GPS untuk melakukan absensi!"), bgcolor="red")
             self.page.snack_bar.open = True
             self.page.update()
-            return # Berhenti di sini, kamera gak akan terbuka
+            return
+
+        # LOGIKA PEMBATASAN 1 HARI 1X ABSEN
+        try:
+            session_id = self.page.session.get("user_id")
+            id_target = int(session_id) if session_id else 0
+
+            db = db_conn.get_db_connection()
+            if db:
+                cursor = db.cursor()
+                tgl_sekarang = datetime.now().strftime("%Y-%m-%d")
+                query = "SELECT COUNT(*) FROM catatan_kehadiran WHERE id_siswa = %s AND DATE(waktu_absen) = %s"
+                cursor.execute(query, (id_target, tgl_sekarang))
+                result = cursor.fetchone()
+                
+                cursor.close()
+                db.close()
+                
+                if result and result[0] > 0:
+                    self.page.snack_bar = ft.SnackBar(
+                        ft.Text("Anda sudah melakukan absensi hari ini! Pembatasan: 1 hari hanya bisa 1x absen."), 
+                        bgcolor="orange"
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+                    return 
+        except Exception as check_ex:
+            print(f"Gagal melakukan validasi pembatasan harian: {check_ex}")
 
         self.btn_text_ref.current.value = "📡 Mencari Sinyal GPS..."
         self.page.update()
 
         try:
-            # 2. Ambil lokasi koordinat HP Siswa saat ini secara live
-            # Fungsi ini akan memicu pop-up izin lokasi di HP Android/iOS siswa
             posisi_siswa = self.geolocator.get_current_position(accuracy="high")
-            
             if posisi_siswa:
-                lat_siswa = posisi_siswa.latitude
-                lon_siswa = posisi_siswa.longitude
+                self.lat_terakhir = float(posisi_siswa.latitude)
+                self.lon_terakhir = float(posisi_siswa.longitude)
                 
-                # 3. Ambil koordinat sekolah dari database
                 from database_connect import ambil_pengaturan_geofencing
                 data_sekolah = ambil_pengaturan_geofencing()
                 
@@ -156,38 +157,26 @@ class SiswaPresensi:
                 lon_sekolah = float(data_sekolah["longitude"])
                 radius_sekolah = float(data_sekolah["radius"])
                 
-                # Pastikan juga koordinat siswa dari HP/Laptop dikonversi ke float
-                lat_siswa = float(posisi_siswa.latitude)
-                lon_siswa = float(posisi_siswa.longitude)
-
-                # 4. Hitung jaraknya menggunakan fungsi Haversine milikmu
-                jarak = self.hitung_jarak_haversine(
-                    lat_siswa, lon_siswa, 
-                    lat_sekolah, lon_sekolah)
+                jarak = self.hitung_jarak_haversine(self.lat_terakhir, self.lon_terakhir, lat_sekolah, lon_sekolah)
+                print(f"DEBUG GPS: Jarak ke Sekolah: {jarak:.2f} meter")
                 
-                print(f"DEBUG GPS: Lokasi Siswa ({lat_siswa}, {lon_siswa}) -> Jarak ke Sekolah: {jarak:.2f} meter")
                 if jarak <= radius_sekolah:
                     self.geo_ok = True
                     self.update_geo_ui()
-                    
-                    # Simpan variabel jarak global agar bisa dipakai saat insert database nanti
                     self.jarak_terakhir = jarak 
-                    
-                    # Lolos validasi! Jalankan kamera selfie ArcFace
                     self.do_capture(e)
                 else:
                     self.geo_ok = False
                     self.update_geo_ui()
-                    self._show_fail_dialog() # Muncul dialog gagal karena di luar koordinat
-                    
+                    self._show_fail_dialog() 
         except Exception as ex:
             print(f"Gagal mengambil GPS HP: {ex}")
             self.page.snack_bar = ft.SnackBar(ft.Text("Gagal mendapatkan lokasi. Pastikan GPS HP aktif!"), bgcolor="red")
             self.page.snack_bar.open = True
-            
         finally:
             if not self.capturing:
-                self.btn_text_ref.current.value = "📸 Ambil Foto & Verifikasi"
+                if self.btn_text_ref.current:
+                    self.btn_text_ref.current.value = "📸 Ambil Foto & Verifikasi"
             self.page.update()
             
     def frame_to_base64(self, frame):
@@ -199,183 +188,85 @@ class SiswaPresensi:
             print(f"Error konversi frame: {e}")
             return None
         
-    # ── Proses capture step-by-step ──
     def do_capture(self, e):
-        if not self.geo_ok:
-            self._show_fail_dialog()
-            return
-        if self.capturing:
+        print("DEBUG: Tombol ditekan!")
+        if not self.geo_ok or self.capturing:
             return
         
-        self.capturing = True
-        self.btn_text_ref.current.value = "⏳ Inisialisasi Kamera..."
-        self.page.update()
-
-        self.cam_sheet = ft.BottomSheet(
-            ft.Container(
-                content=ft.Column(
-                    [
-                        ft.Container(
-                            height=4, width=50, bgcolor=C["border"], border_radius=10,
-                            alignment=ft.alignment.center
-                        ),
-                        ft.Text("Verifikasi Wajah", size=16, weight="bold"),
-                        ft.Text("Posisikan wajah Anda di dalam lingkaran", size=12, color=C["text2"]),
-                        ft.Container(
-                            content=ft.Stack([
-                                ft.Image(ref=self.img_ref, width=320, height=320, fit="cover"),
-                            ], alignment=ft.alignment.center),
-                            border_radius=20,
-                            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                        ),
-                        ft.Text("Sedang memproses...", italic=True, size=12),
-                    ],
-                    tight=True, horizontal_alignment="center", spacing=15,
-                ),
-                padding=25, bgcolor=C["surface"], border_radius=ft.border_radius.only(top_left=20, top_right=20),
-            ),
-            is_scroll_controlled=True,
-            enable_drag=False, 
+        # Tambahkan 'file_type=ft.FilePickerFileType.IMAGE' 
+        # dan pastikan browser tahu kita butuh akses kamera
+        self.camera_picker.pick_files(
+            allow_multiple=False,
+            allowed_extensions=["jpg", "png", "jpeg"],
         )
-        
-        self.page.overlay.append(self.cam_sheet)
-        self.cam_sheet.open = True
+    # Cukup hapus tipe data spesifiknya dan ganti dengan e saja
+        def on_camera_result(self, e):
+            # 3. Setelah foto diambil, baru kita tampilkan "preview" 
+            # sebelum benar-benar dikirim ke API
+            if e.files and e.files[0].path:
+                path_foto = e.files[0].path
+                
+                # Di sini kamu bisa buat Dialog/Sheet untuk konfirmasi foto
+                self.show_preview_dialog(path_foto)
+
+    def show_preview_dialog(self, path_foto):
+        # Tampilkan preview foto agar siswa merasa yakin fotonya sudah benar
+        dlg = ft.AlertDialog(
+            title=ft.Text("Konfirmasi Foto"),
+            content=ft.Image(src=path_foto, width=300, height=300),
+            actions=[
+                ft.TextButton("Kirim Absen", on_click=lambda e: self.eksekusi_kirim(path_foto)),
+                ft.TextButton("Batal", on_click=lambda e: self.close_dlg(e))
+            ]
+        )
+        self.page.dialog = dlg
+        dlg.open = True
         self.page.update()
-        import threading
-        # Kita buat fungsi pembantu kecil untuk menjalankan isi logika kameramu
-        threading.Thread(target=self.execute_camera_logic, daemon=True).start()
 
-    def execute_camera_logic(self):
-        import time
-        import os
-        from datetime import datetime
-        engine = AbsenEngine()
-        cap = cv2.VideoCapture(0)
-        id_target = self.page.session.get("user_id") 
-            
-        print(f"DEBUG: Memulai verifikasi untuk ID: {id_target}")
+    def eksekusi_kirim_final(self, path_foto):
+        self.close_preview()
+        
+        # Tampilkan loading ke user
+        self.page.snack_bar = ft.SnackBar(ft.Text("Mengirim foto ke server..."))
+        self.page.snack_bar.open = True
+        self.page.update()
 
-        if not cap.isOpened():
-            print("Error: Kamera tidak ditemukan")
-            self.capturing = False
-            return
-            
-        status_absen = False
-        nama_siswa = ""
-        skor_wajah = 0.35
-        wa_terkirim = False
-
-        jarak_siswa_ke_sekolah = getattr(self, 'jarak_terakhir', 0.0)
         try:
-             if not os.path.exists("temp_presensi"):
-                 os.makedirs("temp_presensi")
-
-             start_time = time.time()
-             while self.capturing: # Gunakan flag capturing sebagai kontrol loop
-                ret, frame = cap.read()
-                if not ret: break
-
-                durasi = time.time() - start_time
-                    
-                if durasi < 2.0:
-                    display_frame = frame.copy()
-                    cv2.putText(display_frame, f"Menyiapkan Kamera... {int(3-durasi)}", 
-                                (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-                else:
-                    status, hasil_engine, output_frame = engine.recognize_frame(frame, id_target)
-                    display_frame = output_frame 
-                        
-                    if status:
-                        if "|" in hasil_engine:
-                            nama_siswa, skor_wajah = hasil_engine.split("|")
-                        else:
-                            nama_siswa = hasil_engine
-                            skor_wajah = 0.20 # fallback nilai distance kecil (mirip)
-
-                        print(f"✅ BERHASIL MENDETEKSI: {nama_siswa} (Dist: {skor_wajah})")
-                        status_absen = True
-
-                        path_foto_absen = f"temp_presensi/absen_{id_target}.jpg"
-                        # Kita gunakan frame asli (tanpa kotak deteksi wajah) agar foto bersih saat dikirim ke ortu
-                        cv2.imwrite(path_foto_absen, frame) 
-                        print(f"📸 Foto presensi disimpan lokal: {path_foto_absen}")
-
-                        from database_connect import simpan_presensi
-                        simpan_presensi(id_target, skor_wajah, jarak_siswa_ke_sekolah)
-
-                        try:
-                            import database_connect as db_conn
-                            
-                            # Ambil data Kelas dan WA Orang Tua langsung dari MySQL berdasarkan id_siswa
-                            db = db_conn.get_db_connection()
-                            kelas_siswa = "Tidak Diketahui"
-                            wa_orang_tua = ""
-                            
-                            if db:
-                                cursor = db.cursor()
-                                # Sesuaikan nama kolom tabel dataset_siswa/user milikmu
-                                cursor.execute("SELECT kelas, wa_ortu FROM dataset_siswa WHERE id_siswa = %s", (id_target,))
-                                res_siswa = cursor.fetchone()
-                                if res_siswa:
-                                    kelas_siswa = res_siswa[0]
-                                    wa_orang_tua = res_siswa[1]
-                                cursor.close()
-                                db.close()
-                            if wa_orang_tua:
-                                # Tentukan parameter status kehadiran berdasarkan waktu absen saat ini
-                                waktu_sekarang = datetime.now().time()
-                                batas_terlambat = datetime.strptime("07:15:00", "%H:%M:%S").time()
-                                
-                                status_kehadiran = "HADIR (Tepat Waktu)" if waktu_sekarang <= batas_terlambat else "TERLAMBAT"
-                                
-                                print(f"🚀 [Fonnte] Mengirim notifikasi WA ke {wa_orang_tua}...")
-                                # Panggil fungsi kirim WA di database_connect
-                                wa_terkirim = db_conn.kirim_notifikasi_wa(
-                                    nama_siswa=nama_siswa,
-                                    kelas=kelas_siswa,
-                                    status=status_kehadiran,
-                                    wa_ortu=wa_orang_tua,
-                                    file_path=path_foto_absen
-                                )
-                            else:
-                                print("⚠️ [Fonnte] Nomor WhatsApp Orang Tua tidak ditemukan di database.")
-                                
-                        except Exception as wa_ex:
-                            print(f"❌ [Fonnte] Gagal memproses data notifikasi WA: {wa_ex}")
-                        
-                        # Keluar dari perulangan kamera karena proses absensi & WA selesai
-                        break
-
-
-                if self.img_ref.current:
-                    self.img_ref.current.src_base64 = self.frame_to_base64(display_frame)
-                    self.page.update()
-
-        except Exception as ex:
-            print(f"Error di Thread Kamera: {ex}")
-
-        finally:
-             cap.release()
-             self.capturing = False 
-             if hasattr(self, 'cam_sheet'):
-                self.cam_sheet.open = False
-             self.page.update()
-
-             if status_absen:
-                time.sleep(0.3)
+            with open(path_foto, "rb") as file_foto:
+                payload_files = {"file": ("selfie.jpg", file_foto, "image/jpeg")}
+                payload_data = {
+                    "id_siswa": str(self.state.get("user_data", {}).get("id_siswa")),
+                    "latitude": float(self.lat_terakhir),
+                    "longitude": float(self.lon_terakhir)
+                }
+                res = requests.post("http://192.168.1.23:8000/verify-presensi", data=payload_data, files=payload_files, timeout=30)
+            
+            # --- LOGIKA PENANGANAN RESPON ---
+            hasil_api = res.json()
+            if res.status_code == 200 and hasil_api.get("status") == "sukses":
                 waktu_skrg = datetime.now()
+                # Panggil dialog sukses
                 self._show_success_dialog(
-                    nama=nama_siswa, 
-                    jam=waktu_skrg.strftime("%H:%M WIB"), 
-                    status_hadir="Hadir Tepat Waktu" if waktu_skrg.time() <= datetime.strptime("07:15:00", "%H:%M:%S").time() else "Terlambat",
-                    status_wa= wa_terkirim
+                    nama=str(self.state.get("user_data", {}).get("nama", "Siswa")),
+                    jam=waktu_skrg.strftime("%H:%M WIB"),
+                    status_hadir="Hadir",
+                    status_wa=True,
+                    distance=hasil_api.get("akurasi", 0)
                 )
-             else:
-                if self.btn_text_ref.current:
-                    self.btn_text_ref.current.value = "📸 Ambil Foto & Verifikasi"
+            else:
+                self.page.snack_bar = ft.SnackBar(ft.Text(f"Gagal: {hasil_api.get('message')}"), bgcolor="red")
+                self.page.snack_bar.open = True
                 self.page.update()
 
-    def _show_success_dialog(self, nama, jam, status_hadir, status_wa):
+        except Exception as err:
+            print(f"Error kirim API: {err}")
+            self.page.snack_bar = ft.SnackBar(ft.Text("Gagal terhubung ke server!"), bgcolor="red")
+            self.page.snack_bar.open = True
+            self.page.update()
+
+    def _show_success_dialog(self, nama, jam, status_hadir, status_wa, distance):
+        skor_formatted = f"{distance:.2f}% Match" if isinstance(distance, (int, float)) else str(distance)
+
         dlg = ft.AlertDialog(
             modal=True,
             bgcolor=C["surface"],
@@ -384,16 +275,15 @@ class SiswaPresensi:
                 content=ft.Column(
                     controls=[
                         ft.Container(
-                            content=ft.Text("✅", size=40,
-                                            text_align=ft.TextAlign.CENTER),
-                            alignment=ft.alignment.center,width=72, height=72, border_radius=36, bgcolor=C["green_dim"], border=ft.border.all(2, f"{C['green']}40"),
+                            content=ft.Text("✅", size=40, text_align=ft.TextAlign.CENTER),
+                            alignment="center", width=72, height=72, border_radius=36, bgcolor=C["green_dim"], border=ft.border.all(2, f"{C['green']}40"),
                         ),
                         ft.Text(
                             "Presensi Berhasil!",
                             size=18, weight=ft.FontWeight.W_800, color=C["green"], text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Text(
-                            "Wajah berhasil diverifikasi ArcFace.\nLaporan dikirim ke orang tua via WhatsApp.", size=13, color=C["text2"], text_align=ft.TextAlign.CENTER,
+                            "Wajah berhasil diverifikasi ArcFace Server.\nLaporan sukses masuk sistem cloud.", size=13, color=C["text2"], text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Container(
                             content=ft.Column(
@@ -402,10 +292,12 @@ class SiswaPresensi:
                                     self._detail_row("Jam Masuk", jam),
                                     self._detail_row("Status", status_hadir,
                                                      value_color=C["green"] if "Tepat" in status_hadir else "red"),
-                                    self._detail_row("Lokasi", "✓ Dalam Area",
+                                    self._detail_row("Lokasi", "✓ Radius Aman",
                                                      value_color=C["green"]),
-                                    self._detail_row("WA Ortu", 
-                                                     "✓ Terkirim" if status_wa else "✗ Gagal",
+                                    self._detail_row("ArcFace Score", skor_formatted, 
+                                                     value_color=C["blue"]),
+                                    self._detail_row("WA Gateway", 
+                                                     "✓ Diproses Cloud" if status_wa else "✗ Gagal",
                                                      value_color=C["green"] if status_wa else "red"),
                                 ],
                                 spacing=0,
@@ -421,9 +313,9 @@ class SiswaPresensi:
                             ink=True,
                         ),
                     ],
-                    spacing=12,horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    spacing=12, horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 ),
-                width=300,padding=4,
+                width=300, padding=4,
             ),
         )
         self.page.overlay.append(dlg)
@@ -445,9 +337,8 @@ class SiswaPresensi:
                 content=ft.Column(
                     controls=[
                         ft.Container(
-                            content=ft.Text("❌", size=36,
-                                            text_align=ft.TextAlign.CENTER),
-                            alignment=ft.alignment.center, width=68, height=68, border_radius=34, bgcolor=C["red_dim"],border=ft.border.all(2, f"{C['red']}40"),
+                            content=ft.Text("❌", size=36, text_align=ft.TextAlign.CENTER),
+                            alignment="center", width=68, height=68, border_radius=34, bgcolor=C["red_dim"],border=ft.border.all(2, f"{C['red']}40"),
                         ),
                         ft.Text("Lokasi Tidak Valid", size=17,
                                 weight=ft.FontWeight.W_800, color=C["red"],
@@ -495,7 +386,6 @@ class SiswaPresensi:
         )
 
     def build(self) -> ft.Container:
-        # Step tracker
         step_rows = []
         for s in STEPS:
             step_rows.append(
@@ -517,7 +407,6 @@ class SiswaPresensi:
             visible=False,
         )
 
-        # Geo indicator container
         geo_cont = ft.Container(
             ref=self.geo_ref,
             content=geo_indicator(True).content, bgcolor=C["green_dim"], border_radius=8,
@@ -526,11 +415,9 @@ class SiswaPresensi:
             margin=ft.margin.only(bottom=12),
         )
 
-        # Camera box
         cam_box = ft.Container(
             content=ft.Stack(
                 controls=[
-                    # Placeholder
                     ft.Container(
                         content=ft.Column(
                             controls=[
@@ -543,18 +430,17 @@ class SiswaPresensi:
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                             spacing=8,
                         ),
-                        alignment=ft.alignment.center,
+                        alignment="center",
                         expand=True,
                     ),
-                    # Face ring hint
                     ft.Container(
                         width=110, height=110,
                         border_radius=55,
                         border=ft.border.all(2, f"{C['blue']}60"),
-                        alignment=ft.alignment.center,
+                        alignment="center",
                     ),
                 ],
-                alignment=ft.alignment.center,
+                alignment="center",
             ),
             height=260,
             bgcolor=C["surface2"],
@@ -562,24 +448,16 @@ class SiswaPresensi:
             border=ft.border.all(1, C["border"]),
             margin=ft.margin.only(bottom=14),
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+        )
 
-        )
-        # Capture button
-        btn_label = ft.Text(
-            ref=self.btn_text_ref,
-            value="📸 Ambil Foto & Verifikasi",
-            size=15, weight=ft.FontWeight.W_800,
-            color="#FFFFFF",
-            text_align=ft.TextAlign.CENTER,
-        )
         capture_btn = ft.Container(
-            ref=self.btn_absen_ref, # Pastikan ref ini terpasang
+            ref=self.btn_absen_ref,
             content=ft.Row(
                 controls=[
                     ft.Icon("camera_alt_outlined", color="white"),
                     ft.Text(
                         "Ambil Foto & Verifikasi", 
-                        ref=self.btn_text_ref, # Pasang ref juga di teksnya
+                        ref=self.btn_text_ref,
                         size=14, 
                         weight=ft.FontWeight.W_600, 
                         color="white"
@@ -590,17 +468,16 @@ class SiswaPresensi:
             bgcolor="#1A4BD4",
             padding=ft.padding.symmetric(vertical=16),
             border_radius=12,
-            on_click=self.run_real_process, # Ini fungsi yang membuka kamera
+            on_click=self.run_real_process,
             ink=True,
         )
 
-        # Integrity checks card
         gps_row = ft.Container(
             content=ft.Row(
                 controls=[
                     ft.Text("GPS Asli (Anti-Mock)", size=12, color=C["text2"], expand=True),
                     ft.Text(
-                        ref=self.gps_text_ref, # PASANG REF DI SINI
+                        ref=self.gps_text_ref,
                         value="✓ Aman" if not self.is_fake_gps else "✗ Terdeteksi",
                         size=12, weight=ft.FontWeight.W_700,
                         color=C["green"] if not self.is_fake_gps else C["red"],
@@ -610,6 +487,7 @@ class SiswaPresensi:
             border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
             padding=ft.padding.symmetric(vertical=7),
         )
+        
         other_checks = [
             ("VPN Aktif",           True),
         ]
@@ -630,6 +508,7 @@ class SiswaPresensi:
             )
             for lbl, ok in other_checks
         ]
+        
         integrity_card = ft.Container(
             content=ft.Column(
                 controls=[
@@ -669,7 +548,6 @@ class SiswaPresensi:
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    # Topbar
                     ft.Container(
                         content=ft.Row(
                             controls=[
@@ -685,8 +563,6 @@ class SiswaPresensi:
                         ),
                         padding=ft.padding.symmetric(horizontal=16, vertical=12),
                     ),
-
-                    # Body
                     ft.Container(
                         content=ft.Column(
                             controls=[

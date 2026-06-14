@@ -3,7 +3,7 @@
 import flet as ft
 from components.ui import C, card, stat_box, avatar, chip, section_title, divider
 import datetime
-from database_connect import ambil_statistik_siswa, cek_presensi_hari_ini, ambil_notifikasi_siswa
+from database_connect import ambil_statistik_siswa, cek_presensi_hari_ini, ambil_notifikasi_siswa, ambil_statistik_siswa_by_id
 
 class SiswaDashboard:
     def __init__(self, page, state, go_to):
@@ -13,12 +13,14 @@ class SiswaDashboard:
 
     def build(self) -> ft.Container:
         user = self.state.get("user_data", {})
-        id_siswa = user.get("id_siswa")
+        if not user:
+            return ft.Container(content=ft.Text("Data tidak ditemukan!"), padding=20)
+        id_siswa = user.get("id_siswa", 0)
 
         # 1. Ambil data Real-time (Hapus baris yang self.state.get("sudah_hadir"))
         sudah_hadir = cek_presensi_hari_ini(id_siswa)
-        res_stats = ambil_statistik_siswa(id_siswa)
-        data_notif_db = ambil_notifikasi_siswa(id_siswa)
+        res_stats = ambil_statistik_siswa(id_siswa) or {"hadir": 0, "terlambat": 0, "persen": "0%"}
+        data_notif_db = ambil_notifikasi_siswa(id_siswa) or []
 
         # 2. Ambil Profil (Pastikan 'nama', 'kelas', 'nis' sesuai nama kolom di DB)
         nama  = user.get("nama", "Data tidak ditemukan")
@@ -27,9 +29,9 @@ class SiswaDashboard:
         jenis_kelamin    = user.get("jenis_kelamin", "Laki-laki")
 
         if jenis_kelamin.lower() == "perempuan":
-             siswa_avatar = ft.Image(src="avatar_cewek.png",width=34,height=34,fit=ft.ImageFit.CONTAIN)
+             siswa_avatar = ft.Image(src="avatar_cewek.png",width=37,height=37,fit="contain")
         else:
-             siswa_avatar = ft.Image(src="avatar_cowok.png", width=34,height=34,fit=ft.ImageFit.CONTAIN)
+             siswa_avatar = ft.Image(src="avatar_cowok.png", width=37,height=37,fit="contain")
 
         # 3. Proses Notifikasi (Perbaiki Indentasi)
         notifs = []
@@ -40,46 +42,40 @@ class SiswaDashboard:
         hero = ft.Container(
             content=ft.Column(
                 controls=[
+                    # Baris Status Absen
+                    ft.Row(
+                        [
+                            ft.Container(expand=True), 
+                            chip("✓ Sudah Hadir" if sudah_hadir else "● Belum Absen", 
+                                 color="green" if sudah_hadir else "red")
+                        ], 
+                        alignment=ft.MainAxisAlignment.END
+                    ),
+                    
+                    # Baris Konten Utama (Gambar + Teks)
                     ft.Row(
                         controls=[
-                            ft.Container(
-                              content=ft.Image(src="intro.png",width=90,height=90,fit=ft.ImageFit.CONTAIN),
-                              padding=5,
-                              margin=ft.margin.only(right=10),
-                            ),
+                            ft.Image(src="intro.png", width=130, height=130, fit="contain"),
                             ft.Column(
                                 controls=[
-                                    ft.Text("Selamat Datang 👋", size=11,color="#FFFFFF",weight=ft.FontWeight.W_700),
-                                    ft.Text(nama, size=20,weight=ft.FontWeight.W_800,color="#FFFFFF"),
-                                    ft.Text(f"NIS: {nis} · {kelas}",size=12, color=C["text2"]),
+                                    ft.Text("Selamat Datang 👋", size=12, color="#FFFFFF", weight="bold"),
+                                    ft.Text(nama, size=18, weight="bold", color="#FFFFFF"),
+                                    ft.Text(f"NIS: {nis} · {kelas}", size=12, color="#FFFFFF"),
                                 ],
-                                spacing=3,
+                                spacing=0,
+                                alignment=ft.MainAxisAlignment.CENTER,
                                 expand=True,
                             ),
-                            chip(
-                                "✓ Sudah Hadir" if sudah_hadir else "● Belum Absen",color="green" if sudah_hadir else "red",
-                            ),
                         ],
-                        vertical_alignment=ft.CrossAxisAlignment.START,
-                    ),
-                    ft.Container(height=16),
-                    ft.Row(
-                        controls=[
-                            stat_box(str(res_stats["hadir"]), "Hadir", "warn"),
-                            stat_box(str(res_stats["terlambat"]), "Terlambat", "red"),
-                            stat_box(res_stats["persen"], "Kehadiran", "green"),
-                        ],
-                        spacing=10,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                 ],
-                spacing=0,
+                spacing=5, # Jarak kecil antara status chip dan konten utama
             ),
             bgcolor="#1A4BD4",
-            border_radius=16,
-            border=ft.border.all(1, "#1A4BD4"),padding=20,
-            margin=ft.margin.only(bottom=12),
+            padding=16,
+            border_radius=15,
         )
-
         # ── Tombol Presensi ──
         btn_presensi = ft.Container(
             content=ft.Row(
@@ -96,15 +92,51 @@ class SiswaDashboard:
             ),
             bgcolor="#1A4BD4" if not sudah_hadir else C["surface3"],
             border_radius=12,
-            padding=ft.padding.symmetric(vertical=16),
+            padding=ft.Padding(left=0, top=16, right=0, bottom=16),
             on_click=(lambda e: self.go_to("/siswa", tab=1)) if not sudah_hadir else None,
             ink=not sudah_hadir,
-            margin=ft.margin.only(bottom=12),
+            margin=ft.Margin(0, 0, 0, 0),
             shadow=ft.BoxShadow(
                 blur_radius=20, color="#4F8EF740", offset=ft.Offset(0, 6)
             ) if not sudah_hadir else None,
         )
-
+        # ── Rekap Kehadiran Horizontal ──
+        try:
+            id_siswa = self.state["user_data"].get("id_siswa", 0)
+            res_stats = ambil_statistik_siswa_by_id(id_siswa)
+            print(f"DEBUG: res_stats yang didapat: {res_stats}")
+            if not res_stats:
+                res_stats = {"hadir": 0, "terlambat": 0, "persen": "0%"}
+        except Exception as e:
+            print(f"DEBUG: Gagal ambil statistik: {e}")
+            res_stats = {"hadir": 0, "terlambat": 0, "persen": "0%"}
+        
+        # ── Rekap Kehadiran (Uji Coba Paling Sederhana) ──
+        rekap_horizontal = ft.Container(
+            content=ft.Row(
+                controls=[
+                    # Kotak Hadir
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("Hadir", size=12, color="white"),
+                            ft.Text(str(res_stats.get("HADIR", 0)), size=24, weight="bold", color="white"),
+                        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+                        width=130, padding=15, bgcolor="green", border=ft.border.all(1, ft.Colors.GREEN_800), border_radius=15
+                    ),
+                    # Kotak Terlambat
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("Terlambat", size=12, color="white"),
+                            ft.Text(str(res_stats.get("TERLAMBAT", 0)), size=24, weight="bold", color="white"),
+                        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+                        width=130, padding=15, bgcolor="red", border=ft.border.all(1, ft.Colors.RED_800), border_radius=15
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=10,
+            ),
+            margin=ft.Margin(0,0,0,10),
+        )
         # ── Notifikasi ──
         notif_items = []
         for ico, teks, baru in notifs:
@@ -119,9 +151,9 @@ class SiswaDashboard:
                         spacing=10,
                         vertical_alignment=ft.CrossAxisAlignment.START,
                     ),
-                    border=ft.border.only(bottom=ft.BorderSide(1, C["border"])
+                    border=ft.Border(bottom=ft.BorderSide(1, C["border"])
                     ),
-                    padding=ft.padding.symmetric(vertical=8),
+                    padding=ft.Padding(left=0, top=8, right=0, bottom=8),
                 )
             )
 
@@ -138,49 +170,38 @@ class SiswaDashboard:
                 spacing=0,
             )
         )
-
+           
+        # ── Return Final (Revisi Padding agar tidak error) ──
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    # Topbar
+                    # 1. Topbar (Header)
                     ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Column(
-                                    controls=[
-                                        ft.Text("SMA Sjakhyakirti", size=13,weight=ft.FontWeight.W_700,color=C["blue"]),
-                                        ft.Text("Dashboard Siswa", size=11,color=C["text2"]),
-                                    ],
-                                    spacing=1,
-                                    expand=True,
-                                ),
-                                siswa_avatar,
-                            ],
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
+                        content=ft.Row([
+                            ft.Column([
+                                ft.Text("SMA Sjakhyakirti", size=16, weight="bold", color=C["blue"]),
+                                ft.Text("Dashboard Siswa", size=13, color=C["text2"])
+                            ], spacing=0, expand=True),
+                            siswa_avatar
+                        ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
                         bgcolor=C["surface"],
-                        border=ft.border.only(
-                            bottom=ft.BorderSide(1, C["border"])
-                        ),
-                        padding=ft.padding.symmetric(horizontal=16, vertical=10),
+                        padding=ft.Padding(left=16, top=40, right=16, bottom=15),
+                        border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
                     ),
-
-                    # Scrollable body
+                    
+                    # 2. Konten Utama (Dibuat sama polanya seperti profil.py)
                     ft.Container(
+                        padding=ft.Padding(left=16, right=16, top=20, bottom=16),
                         content=ft.Column(
-                            controls=[
-                                ft.Container(height=4),hero,btn_presensi,notif_card,
-                                ft.Container(height=16),
-                            ],
-                            spacing=0,
+                            controls=[hero, btn_presensi, rekap_horizontal, notif_card],
+                            spacing=15,
                             scroll=ft.ScrollMode.AUTO,
                         ),
-                        expand=True,
-                        padding=ft.padding.symmetric(horizontal=16),
+                        expand=True, 
                     ),
                 ],
                 spacing=0,
             ),
-            expand=True,
             bgcolor=C["bg"],
+            expand=True, 
         )

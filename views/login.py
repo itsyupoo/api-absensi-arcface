@@ -1,5 +1,3 @@
-# views/login.py
-
 import flet as ft
 from components.ui import C, field_input, primary_button
 from database_connect import proses_login
@@ -22,95 +20,101 @@ class LoginView:
             self.err_ref.current.visible = True
             self.page.update()
             return
-
-        user = proses_login(username, password)
-        
-        if not user:
-            self.err_ref.current.value = "NIS/NIP atau password salah!"
-            self.err_ref.current.visible = True
-            self.page.update()
-            return
-        
-        self.state["user_role"] = user["role"]
-        self.state["user_data"] = user
-        self.state["user_id"] = user["id_siswa"]
-        
-        self.page.session.set("user_id", user["id_siswa"])
-        self.page.session.set("user_nama", user["nama"])
-
-        self.err_ref.current.visible = False
-        self.go_to(f"/{user['role']}", tab=0)
-
-    def set_demo(self, role: str):
-        self.ref_user.current.value = "12345" if role == "siswa" else "admin123"
-        self.ref_pass.current.value = "sjakhyakirti2026" if role == "siswa" else "foradminsjakhyakirti2026"
+        self.err_ref.current.value = "Sedang memverifikasi..."
+        self.err_ref.current.color = "blue"
+        self.err_ref.current.visible = True
         self.page.update()
 
+        hasil = proses_login(username, password)
+
+        if hasil["status"] == "success":
+            # Jika berhasil, pindah ke halaman utama/dashboard
+            role = hasil["data"].get("role")
+            self.state["user_data"] = hasil["data"] 
+            self.state["user_role"] = hasil["data"].get("role")
+            
+            role = hasil["data"].get("role")
+            if role == "admin":
+                self.go_to("/admin")
+            else:
+                self.go_to("/siswa")
+        else:
+            # Jika gagal, tampilkan pesan error dari database
+            self.err_ref.current.value = hasil["message"]
+            self.err_ref.current.color = "red"
+            self.err_ref.current.visible = True
+            self.page.update()
+
+      
+        
     def build(self) -> ft.View:
         return ft.View(
-            route="/login", bgcolor="#FFFFFF", padding=0,
+            route="/login", 
+            bgcolor="#FFFFFF", 
+            padding=0,
+            # PENTING: Gunakan vertical_alignment dan horizontal_alignment di View
+            vertical_alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
                 ft.Container(
                     expand=True,
-                    alignment=ft.alignment.center,
                     bgcolor="#FFFFFF",
-                    content=ft.ListView( 
-                        expand=True,
-                        padding=ft.padding.symmetric(horizontal=28, vertical=40),
+                    # Kita buat Container ini mengisi seluruh View
+                    content=ft.Column(
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
-                            
-                            # 2. Kotak Biru (Logo + Teks Sistem)
+                            # Wrapper agar konten tetap di tengah
                             ft.Container(
                                 content=ft.Column(
-                                    controls=[
-                                        ft.Image(src="/logo_kirti_fix.png", width=80, height=80,  fit=ft.ImageFit.CONTAIN),
-                                        ft.Text(
-                                            "SISTEM ABSENSI DIGITAL", size=20, weight=ft.FontWeight.W_900,color="#FFFFFF", text_align=ft.TextAlign.CENTER),
-                                    ],
-                                    alignment=ft.MainAxisAlignment.CENTER,
                                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                                     spacing=10,
-                                ),
-                                width=300, padding=ft.padding.all(30), border_radius=15,bgcolor="#1A4BD4", alignment=ft.alignment.center, margin=ft.margin.only(bottom=20),
-                            ),
-
-                            # 3. Teks Sekolah
-                            ft.Text("SMA SJAKHYAKIRTI", size=22, weight=ft.FontWeight.W_800,color=C["text"], text_align=ft.TextAlign.CENTER),
-                            
-                            # 4. Teks Kota
-                            ft.Container(
-                                content=ft.Text("Palembang",size=13,color=C["text2"],text_align=ft.TextAlign.CENTER),
-                                margin=ft.margin.only(bottom=36),
-                            ),
-
-                            # 5. Form Login
-                            ft.Container(
-                                content=ft.Column(
                                     controls=[
-                                        field_input("NISN / NIP", hint="Masukkan NISN atau NIP",ref=self.ref_user),
-                                        ft.Container(height=10),
-                                        field_input("Password",hint="••••••••",password=True,ref=self.ref_pass),
-                                        ft.Container(height=6),
-                                        ft.Text("",ref=self.err_ref,color=C["red"],size=12,visible=False),
-                                        ft.Container(height=10),
+                                        # 1. Kotak Biru
                                         ft.Container(
-                                            content=ft.Text("Masuk",size=15,weight=ft.FontWeight.W_800,color="#FFFFFF",text_align=ft.TextAlign.CENTER),
-                                            bgcolor="#1A4BD4",border_radius=10,padding=ft.padding.symmetric(vertical=14),on_click=self.do_login, ink=True),
-                                        ft.Container(height=16),
-                                        ft.Row(
-                                            controls=[
-                                                ft.Text("Demo: ", size=12, color=C["text3"]),ft.TextButton("Siswa", on_click=lambda e:self.set_demo("siswa")),
-                                                ft.Text("·", size=12, color=C["text3"]), ft.TextButton("Admin", on_click=lambda e: self.set_demo("admin")),
-                                            ],
-                                            alignment=ft.MainAxisAlignment.CENTER,
-                                            spacing=4,
+                                            content=ft.Column(
+                                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                                spacing=10,
+                                                controls=[
+                                                    ft.Image(src="/logo_kirti_fix.png", width=80, height=80, fit="contain"),
+                                                    ft.Text("SISTEM ABSENSI DIGITAL", size=20, weight="bold", color="#FFFFFF", text_align="center"),
+                                                ],
+                                            ),
+                                            expand=True,
+                                            margin=ft.Margin(0, 0, 0, 20), 
+                                            padding=30, border_radius=15, 
+                                            bgcolor="#1A4BD4", 
                                         ),
-                                    ],
-                                ),
-                                bgcolor=C["surface"],border_radius=20,border=ft.border.all(1, C["border2"]),padding=28,shadow=ft.BoxShadow(blur_radius=40,color="#00000015"),
-                            ),
-                        ],
-                    ),
-                ),
-            ],
+                                        # 2. Form Login
+                                        ft.Container(
+                                            content=ft.Column(
+                                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                                controls=[
+                                                    field_input("NISN / NIP", hint="Masukkan NISN atau NIP", ref=self.ref_user),
+                                                    ft.Container(height=10),
+                                                    field_input("Password", hint="••••••••", password=True, ref=self.ref_pass),
+                                                    ft.Text("", ref=self.err_ref, color="red", size=12, visible=False),
+                                                    ft.Container(height=10),
+                                                    ft.ElevatedButton(
+                                                        "Masuk",
+                                                        on_click=self.do_login,
+                                                        width=300, height=50,
+                                                        style=ft.ButtonStyle(bgcolor="#1A4BD4", color="#FFFFFF"),
+                                                    ),
+                                                ],
+                                            ),
+                                            bgcolor="#FFFFFF", border_radius=20,
+                                            border=ft.Border(
+                                                left=ft.BorderSide(1, "#D1D1D1"), top=ft.BorderSide(1, "#D1D1D1"),
+                                                right=ft.BorderSide(1, "#D1D1D1"), bottom=ft.BorderSide(1, "#D1D1D1"),
+                                            ),
+                                            padding=28, width=350,
+                                        ),
+                                    ]
+                                )
+                            )
+                        ]
+                    )
+                )
+            ]
         )
