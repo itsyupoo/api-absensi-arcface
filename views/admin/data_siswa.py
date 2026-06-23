@@ -7,6 +7,7 @@ import json
 import threading
 import time
 import requests
+import traceback
 
 class AdminDataSiswa:
     def __init__(self, page, state, go_to):
@@ -122,10 +123,12 @@ class AdminDataSiswa:
         if "selected_images" not in self.state:
             self.state["selected_images"] = []
         for f in files:
-            print("FILE =", f)
-            print("PATH =", getattr(f, "path", None))
-            print("NAME =", getattr(f, "name", None))
-            print("BYTES =", getattr(f, "bytes", None))
+            print("PATH =", f.path)
+            print("NAME =", f.name)
+            self._snack(
+                f"PATH={f.path}",
+                color="blue"
+            )
             self.state["selected_images"].append(f.path)
         jumlah_baru = len(files)
         jumlah_total = len(self.state["selected_images"])
@@ -191,12 +194,19 @@ class AdminDataSiswa:
             )
             print("IMAGES =", images)
             for path in images:
-                print("PATH =", path)
 
-                self._snack(
-                    f"PATH = {path}",
-                    color="orange"
-                )
+                print("PATH =", path)
+                print("TYPE =", type(path))
+
+                if path is None:
+
+                    self._snack(
+                        "PATH FOTO = NONE",
+                        color="red"
+                    )
+
+                    return
+
                 files.append(
                     (
                         "files",
@@ -253,6 +263,10 @@ class AdminDataSiswa:
                 )
 
         except Exception as err:
+
+            print("========== ERROR ==========")
+            traceback.print_exc()
+
             self._snack(
                 f"❌ {str(err)}",
                 color="red"
