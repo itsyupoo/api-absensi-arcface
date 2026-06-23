@@ -94,17 +94,16 @@ class SiswaPresensi:
         self.page.open(snack)
         self.page.update()
 
-    def run_real_process(self, e):
+    async def run_real_process(self, e):
         id_siswa = self.state["user_data"]["id_siswa"]
         nama = self.state["user_data"]["nama"]
 
-        print("ID =", id_siswa)
-        print("NAMA =", nama)
-
-        print(self.state["user_data"])
-        self.page.launch_url(
+        url= (
             f"https://sjakhyakirtibackendapi-production.up.railway.app/presensi-web?id_siswa={id_siswa}&nama={nama}"
         )
+
+        print("URL =", url)
+        await self.page.launch_url(url)
 
    
     def buka_pilihan_foto(self, e):
