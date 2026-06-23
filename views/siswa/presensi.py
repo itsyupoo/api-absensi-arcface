@@ -170,10 +170,13 @@ class SiswaPresensi:
         print("=== CEK GEO ===")
         print([x for x in dir(self.page) if "location" in x.lower()])
         print([x for x in dir(self.page) if "geo" in x.lower()])
+        print("=== JS CHECK ===")
+        print([x for x in dir(self.page) if "js" in x.lower()])
+        print([x for x in dir(self.page) if "script" in x.lower()])
+        print([x for x in dir(self.page) if "eval" in x.lower()])
         self.get_location()
    
     def buka_pilihan_foto(self, e):
-        print("BOTTOMSHEET DIBUKA")
         self.bs = ft.BottomSheet(
             content=ft.Container(
                 padding=20,
