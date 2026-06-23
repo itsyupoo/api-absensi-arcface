@@ -49,22 +49,9 @@ class SiswaPresensi:
         self.res_lokasi_ref = ft.Ref[ft.Text]()
         self.res_wa_ref = ft.Ref[ft.Text]()
         self.jarak_terakhir = None
-        self.lat_terakhir = 0.0
-        self.lon_terakhir = 0.0 
         self.lokasi_siap = False
         self._active_dlg = None
         self._fail_dlg = None
-
-    def hitung_jarak_haversine(self, lat1, lon1, lat2, lon2):
-        R = 6371000.0 
-        phi1 = math.radians(lat1)
-        phi2 = math.radians(lat2)
-        delta_phi = math.radians(lat2 - lat1)
-        delta_lambda = math.radians(lon2 - lon1)
-        
-        a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        return R * c
 
     def get_location(self):
         print("WEB MODE")
@@ -73,50 +60,6 @@ class SiswaPresensi:
             lat=-3.0360034410727312,
             lon=104.75166409564264
         )
-
-    def on_location_callback(self, **kwargs):
-        print("GPS CALLBACK DIPANGGIL")
-        print("DATA GPS =", kwargs)
-
-        lat = kwargs.get("lat")
-        lon = kwargs.get("lon")
-
-        print("LAT =", lat)
-        print("LON =", lon)
-
-        if lat is not None and lon is not None:
-            self.lat_terakhir = float(lat)
-            self.lon_terakhir = float(lon)
-                       
-            from database_connect import ambil_pengaturan_geofencing
-            data_sekolah = ambil_pengaturan_geofencing()
-            print("DATA SEKOLAH =", data_sekolah)
-            
-            jarak = self.hitung_jarak_haversine(
-                self.lat_terakhir, self.lon_terakhir, 
-                float(data_sekolah["latitude"]), float(data_sekolah["longitude"])
-            )
-            print("JARAK =", jarak)
-            print("RADIUS =", data_sekolah["radius"])
-
-            if jarak <= float(data_sekolah["radius"]):
-                print("MASUK SUKSES GEOGENCING")
-                self.geo_ok = True
-                self.jarak_terakhir = round(jarak, 2)
-                self.update_geo_ui()
-                self.buka_pilihan_foto(None)
-            else:
-                print("MASUK FAIL GEOFENCING")
-                self.geo_ok = False
-                self.jarak_terakhir = round(jarak, 2)
-                self.update_geo_ui()
-
-                self._show_fail_dialog(
-                    f"Lokasi Tidak Valid.\nJarak Anda {round(jarak,2)} meter dari sekolah."
-                )
-            self.page.update()
-        else:
-            print("GPS TIDAK MEMBERIKAN KOORDINAT")    
 
     def update_geo_ui(self):
         if self.geo_ref.current:
@@ -152,29 +95,17 @@ class SiswaPresensi:
         self.page.update()
 
     def run_real_process(self, e):
-        print("TOMBOL PRESENSI DIKLIK")
+        id_siswa = self.state["user_data"]["id_siswa"]
+        nama = self.state["user_data"]["nama"]
 
-        print("PLATFORM PAGE =", self.page.platform)
-        print("ANDROID?", self.page.platform == ft.PagePlatform.ANDROID)
+        print("ID =", id_siswa)
+        print("NAMA =", nama)
 
-        try:
-            print("WEB =", self.page.web)
-        except Exception as err:
-            print("WEB TIDAK ADA =", err)
+        print(self.state["user_data"])
+        self.page.launch_url(
+            f"https://sjakhyakirtibackendapi-production.up.railway.app/presensi-web?id_siswa={id_siswa}&nama={nama}"
+        )
 
-        print("PAGE ATTR =", [x for x in dir(self.page) if "web" in x.lower()])
-        
-        self.geo_ok = False
-        self.update_geo_ui()
-
-        print("=== CEK GEO ===")
-        print([x for x in dir(self.page) if "location" in x.lower()])
-        print([x for x in dir(self.page) if "geo" in x.lower()])
-        print("=== JS CHECK ===")
-        print([x for x in dir(self.page) if "js" in x.lower()])
-        print([x for x in dir(self.page) if "script" in x.lower()])
-        print([x for x in dir(self.page) if "eval" in x.lower()])
-        self.get_location()
    
     def buka_pilihan_foto(self, e):
         print("BOTTOMSHEET DIBUKA")
@@ -244,15 +175,6 @@ class SiswaPresensi:
         print("PATH FOTO =", path_foto)
         self.show_preview_dialog(path_foto)
         print("SHOW PREVIEW DIPANGGIL")
-
-    async def do_capture(self, e):
-        if not self.geo_ok or self.capturing:
-            return
-        print("Tombol ambil foto ditekan")
-        files = await self.camera_picker.pick_files(
-            allow_multiple=False,allowed_extensions=["jpg", "jpeg", "png"])
-        print("pick_files selesai")
-        print(files)
 
     def show_preview_dialog(self, path_foto):
         print(">>> SHOW PREVIEW DIALOG")
