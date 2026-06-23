@@ -163,9 +163,13 @@ class SiswaPresensi:
             print("WEB TIDAK ADA =", err)
 
         print("PAGE ATTR =", [x for x in dir(self.page) if "web" in x.lower()])
-
+        
         self.geo_ok = False
         self.update_geo_ui()
+
+        print("=== CEK GEO ===")
+        print([x for x in dir(self.page) if "location" in x.lower()])
+        print([x for x in dir(self.page) if "geo" in x.lower()])
         self.get_location()
    
     def buka_pilihan_foto(self, e):
