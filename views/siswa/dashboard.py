@@ -12,6 +12,10 @@ class SiswaDashboard:
         self.go_to  = go_to
 
     def build(self) -> ft.Container:
+        if self.state.get("dashboard_refresh"):
+            print("REFRESH DASHBOARD")
+            self.state["dashboard_refresh"] = False
+            
         user = self.state.get("user_data", {})
         if not user:
             return ft.Container(content=ft.Text("Data tidak ditemukan!"), padding=20)
@@ -93,8 +97,8 @@ class SiswaDashboard:
             bgcolor="#1A4BD4" if not sudah_hadir else C["surface3"],
             border_radius=12,
             padding=ft.Padding(left=0, top=16, right=0, bottom=16),
-            on_click=(lambda e: self.go_to("/siswa", tab=1)) if not sudah_hadir else None,
-            ink=not sudah_hadir,
+            on_click=None,
+            ink=not sudah_hadir, 
             margin=ft.Margin(0, 0, 0, 0),
             shadow=ft.BoxShadow(
                 blur_radius=20, color="#4F8EF740", offset=ft.Offset(0, 6)
@@ -104,11 +108,9 @@ class SiswaDashboard:
         try:
             id_siswa = self.state["user_data"].get("id_siswa", 0)
             res_stats = ambil_statistik_siswa_by_id(id_siswa)
-            print(f"DEBUG: res_stats yang didapat: {res_stats}")
             if not res_stats:
                 res_stats = {"hadir": 0, "terlambat": 0, "persen": "0%"}
         except Exception as e:
-            print(f"DEBUG: Gagal ambil statistik: {e}")
             res_stats = {"hadir": 0, "terlambat": 0, "persen": "0%"}
         
         # ── Rekap Kehadiran (Uji Coba Paling Sederhana) ──
@@ -117,17 +119,19 @@ class SiswaDashboard:
                 controls=[
                     # Kotak Hadir
                     ft.Container(
+                        expand=True,
                         content=ft.Column([
                             ft.Text("Hadir", size=12, color="white"),
-                            ft.Text(str(res_stats.get("HADIR", 0)), size=24, weight="bold", color="white"),
+                            ft.Text(str(res_stats.get("hadir", 0)), size=24, weight="bold", color="white"),
                         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
                         width=130, padding=15, bgcolor="green", border=ft.border.all(1, ft.Colors.GREEN_800), border_radius=15
                     ),
                     # Kotak Terlambat
                     ft.Container(
+                        expand=True,
                         content=ft.Column([
                             ft.Text("Terlambat", size=12, color="white"),
-                            ft.Text(str(res_stats.get("TERLAMBAT", 0)), size=24, weight="bold", color="white"),
+                            ft.Text(str(res_stats.get("terlambat", 0)), size=24, weight="bold", color="white"),
                         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
                         width=130, padding=15, bgcolor="red", border=ft.border.all(1, ft.Colors.RED_800), border_radius=15
                     ),
@@ -173,35 +177,38 @@ class SiswaDashboard:
            
         # ── Return Final (Revisi Padding agar tidak error) ──
         return ft.Container(
-            content=ft.Column(
-                controls=[
-                    # 1. Topbar (Header)
-                    ft.Container(
-                        content=ft.Row([
-                            ft.Column([
-                                ft.Text("SMA Sjakhyakirti", size=16, weight="bold", color=C["blue"]),
-                                ft.Text("Dashboard Siswa", size=13, color=C["text2"])
-                            ], spacing=0, expand=True),
-                            siswa_avatar
-                        ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                        bgcolor=C["surface"],
-                        padding=ft.Padding(left=16, top=40, right=16, bottom=15),
-                        border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
-                    ),
-                    
-                    # 2. Konten Utama (Dibuat sama polanya seperti profil.py)
-                    ft.Container(
-                        padding=ft.Padding(left=16, right=16, top=20, bottom=16),
-                        content=ft.Column(
-                            controls=[hero, btn_presensi, rekap_horizontal, notif_card],
-                            spacing=15,
-                            scroll=ft.ScrollMode.AUTO,
-                        ),
-                        expand=True, 
-                    ),
-                ],
-                spacing=0,
-            ),
+            expand=True,
             bgcolor=C["bg"],
-            expand=True, 
+            content=ft.SafeArea(
+                ft.Column(
+                    spacing=0,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    controls=[
+                        # 1. Topbar (Header)
+                        ft.Container(
+                            bgcolor=C["surface"],
+                            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+                            padding=16,
+                            content=ft.Row([
+                                ft.Column([
+                                    ft.Text("SMA Sjakhyakirti", size=16, weight="bold", color=C["blue"]),
+                                    ft.Text("Dashboard Siswa", size=13, color=C["text2"])
+                                ], spacing=0, expand=True),
+                                siswa_avatar
+                            ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        ),
+                        
+                        # 2. Konten Utama
+                        ft.Container(
+                            expand=True,
+                            padding=16,
+                            content=ft.Column(
+                                scroll=ft.ScrollMode.AUTO,
+                                spacing=15,
+                                controls=[hero, btn_presensi, rekap_horizontal, notif_card],
+                            ),
+                        ),
+                    ],
+                )
+            ),
         )

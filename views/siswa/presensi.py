@@ -1,7 +1,6 @@
 # views/siswa/presensi.py
 
 import flet as ft
-import cv2
 import base64
 import math
 import time
@@ -11,6 +10,10 @@ from components.ui import C, geo_indicator, chip
 import importlib
 import database_connect as db_conn
 importlib.reload(db_conn)
+import platform
+print(platform.system())
+import os
+
 
 STEPS = [
     "Mendeteksi wajah...",
@@ -29,7 +32,6 @@ class SiswaPresensi:
         self.geo_ok    = True
         self.capturing = False
         self.is_fake_gps = False
-
         self.geo_ref      = ft.Ref[ft.Container]()
         self.step_col_ref = ft.Ref[ft.Column]()
         self.btn_ref      = ft.Ref[ft.Container]()
@@ -39,25 +41,21 @@ class SiswaPresensi:
         self.cam_sheet_ref = ft.Ref[ft.BottomSheet]()
         self.gps_text_ref = ft.Ref[ft.Text]()
         self.btn_absen_ref = ft.Ref[ft.Container]()
-        self.camera_picker = ft.FilePicker(on_result=self.on_camera_result)
-        self.page.overlay.append(self.camera_picker)
+        self.camera_picker = ft.FilePicker()
+        self.page.services.append(self.camera_picker)
         self.res_nama_ref = ft.Ref[ft.Text]()
         self.res_jam_ref = ft.Ref[ft.Text]()
         self.res_status_ref = ft.Ref[ft.Text]()
         self.res_lokasi_ref = ft.Ref[ft.Text]()
         self.res_wa_ref = ft.Ref[ft.Text]()
-
+        self.jarak_terakhir = None
         self.lat_terakhir = 0.0
         self.lon_terakhir = 0.0 
-               
-        self.geolocator = ft.Geolocator(
-            on_error=lambda e: print(f"Geolocator error: {e.data}")
-        )
-        if self.geolocator not in self.page.overlay:
-            self.page.overlay.append(self.geolocator)
+        self.lokasi_siap = False
+        self._active_dlg = None
+        self._fail_dlg = None
 
     def hitung_jarak_haversine(self, lat1, lon1, lat2, lon2):
-        """Menghitung jarak antara dua koordinat dalam satuan meter"""
         R = 6371000.0 
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
@@ -68,8 +66,59 @@ class SiswaPresensi:
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         return R * c
 
+    def get_location(self):
+        print("WEB MODE")
+
+        self.on_location_callback(
+            lat=-3.0360034410727312,
+            lon=104.75166409564264
+        )
+
+    def on_location_callback(self, **kwargs):
+        print("GPS CALLBACK DIPANGGIL")
+        print("DATA GPS =", kwargs)
+
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+
+        print("LAT =", lat)
+        print("LON =", lon)
+
+        if lat is not None and lon is not None:
+            self.lat_terakhir = float(lat)
+            self.lon_terakhir = float(lon)
+                       
+            from database_connect import ambil_pengaturan_geofencing
+            data_sekolah = ambil_pengaturan_geofencing()
+            print("DATA SEKOLAH =", data_sekolah)
+            
+            jarak = self.hitung_jarak_haversine(
+                self.lat_terakhir, self.lon_terakhir, 
+                float(data_sekolah["latitude"]), float(data_sekolah["longitude"])
+            )
+            print("JARAK =", jarak)
+            print("RADIUS =", data_sekolah["radius"])
+
+            if jarak <= float(data_sekolah["radius"]):
+                print("MASUK SUKSES GEOGENCING")
+                self.geo_ok = True
+                self.jarak_terakhir = round(jarak, 2)
+                self.update_geo_ui()
+                self.buka_pilihan_foto(None)
+            else:
+                print("MASUK FAIL GEOFENCING")
+                self.geo_ok = False
+                self.jarak_terakhir = round(jarak, 2)
+                self.update_geo_ui()
+
+                self._show_fail_dialog(
+                    f"Lokasi Tidak Valid.\nJarak Anda {round(jarak,2)} meter dari sekolah."
+                )
+            self.page.update()
+        else:
+            print("GPS TIDAK MEMBERIKAN KOORDINAT")    
+
     def update_geo_ui(self):
-        """Update tampilan indikator lokasi di dashboard"""
         if self.geo_ref.current:
             self.geo_ref.current.content = geo_indicator(self.geo_ok).content
             self.geo_ref.current.bgcolor = C["green_dim"] if self.geo_ok else C["red_dim"]
@@ -79,7 +128,6 @@ class SiswaPresensi:
             self.page.update()
 
     def toggle_geo(self, e):
-        """Toggle lokasi (demo)"""
         self.is_fake_gps = not self.is_fake_gps
         
         if self.is_fake_gps:
@@ -99,174 +147,255 @@ class SiswaPresensi:
             msg = "Sistem Keamanan: Lokasi Terverifikasi Asli"
             color = "green"
 
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text(msg),
-            bgcolor=color,
-            duration=3000
-        )
-        self.page.snack_bar.open = True
+        snack = ft.SnackBar(content=ft.Text(msg), bgcolor=color, duration=3000)
+        self.page.open(snack)
         self.page.update()
 
     def run_real_process(self, e):
-        if self.is_fake_gps:
-            self.page.snack_bar = ft.SnackBar(ft.Text("Gagal: Matikan Fake GPS untuk melakukan absensi!"), bgcolor="red")
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
+        print("TOMBOL PRESENSI DIKLIK")
 
-        # LOGIKA PEMBATASAN 1 HARI 1X ABSEN
+        print("PLATFORM PAGE =", self.page.platform)
+        print("ANDROID?", self.page.platform == ft.PagePlatform.ANDROID)
+
         try:
-            session_id = self.page.session.get("user_id")
-            id_target = int(session_id) if session_id else 0
+            print("WEB =", self.page.web)
+        except Exception as err:
+            print("WEB TIDAK ADA =", err)
 
-            db = db_conn.get_db_connection()
-            if db:
-                cursor = db.cursor()
-                tgl_sekarang = datetime.now().strftime("%Y-%m-%d")
-                query = "SELECT COUNT(*) FROM catatan_kehadiran WHERE id_siswa = %s AND DATE(waktu_absen) = %s"
-                cursor.execute(query, (id_target, tgl_sekarang))
-                result = cursor.fetchone()
-                
-                cursor.close()
-                db.close()
-                
-                if result and result[0] > 0:
-                    self.page.snack_bar = ft.SnackBar(
-                        ft.Text("Anda sudah melakukan absensi hari ini! Pembatasan: 1 hari hanya bisa 1x absen."), 
-                        bgcolor="orange"
-                    )
-                    self.page.snack_bar.open = True
-                    self.page.update()
-                    return 
-        except Exception as check_ex:
-            print(f"Gagal melakukan validasi pembatasan harian: {check_ex}")
+        print("PAGE ATTR =", [x for x in dir(self.page) if "web" in x.lower()])
 
-        self.btn_text_ref.current.value = "📡 Mencari Sinyal GPS..."
+        self.geo_ok = False
+        self.update_geo_ui()
+        self.get_location()
+   
+    def buka_pilihan_foto(self, e):
+        print("BOTTOMSHEET DIBUKA")
+        self.bs = ft.BottomSheet(
+            content=ft.Container(
+                padding=20,
+                content=ft.Column(tight=True,
+                    controls=[ft.Text("Pilih Sumber Foto",size=18,weight=ft.FontWeight.BOLD),
+                        ft.Divider(),
+                        ft.ListTile(leading=ft.Icon(ft.Icons.CAMERA_ALT),title=ft.Text("Ambil Selfie"),subtitle=ft.Text(    "Gunakan kamera perangkat"),
+                            on_click=self.fitur_kamera
+                        ),
+                        ft.ListTile(
+                            leading=ft.Icon(ft.Icons.PHOTO_LIBRARY),
+                            title=ft.Text("Pilih dari Galeri"),
+                            subtitle=ft.Text(    "Pilih foto yang sudah ada"),
+                            on_click=self.pilih_dari_galeri
+                        ),
+                        ft.Divider(),
+                        ft.TextButton("Batal",on_click=self.tutup_bottomsheet)
+                    ])
+            )
+        )
+        self.bs.open = True
+        self.page.show_dialog(self.bs)
+
+    def tutup_bottomsheet(self, e):
+        print("TUTUP BOTTOMSHEET")
+        self.bs.open = False
         self.page.update()
 
-        try:
-            posisi_siswa = self.geolocator.get_current_position(accuracy="high")
-            if posisi_siswa:
-                self.lat_terakhir = float(posisi_siswa.latitude)
-                self.lon_terakhir = float(posisi_siswa.longitude)
-                
-                from database_connect import ambil_pengaturan_geofencing
-                data_sekolah = ambil_pengaturan_geofencing()
-                
-                lat_sekolah = float(data_sekolah["latitude"])
-                lon_sekolah = float(data_sekolah["longitude"])
-                radius_sekolah = float(data_sekolah["radius"])
-                
-                jarak = self.hitung_jarak_haversine(self.lat_terakhir, self.lon_terakhir, lat_sekolah, lon_sekolah)
-                print(f"DEBUG GPS: Jarak ke Sekolah: {jarak:.2f} meter")
-                
-                if jarak <= radius_sekolah:
-                    self.geo_ok = True
-                    self.update_geo_ui()
-                    self.jarak_terakhir = jarak 
-                    self.do_capture(e)
-                else:
-                    self.geo_ok = False
-                    self.update_geo_ui()
-                    self._show_fail_dialog() 
-        except Exception as ex:
-            print(f"Gagal mengambil GPS HP: {ex}")
-            self.page.snack_bar = ft.SnackBar(ft.Text("Gagal mendapatkan lokasi. Pastikan GPS HP aktif!"), bgcolor="red")
-            self.page.snack_bar.open = True
-        finally:
-            if not self.capturing:
-                if self.btn_text_ref.current:
-                    self.btn_text_ref.current.value = "📸 Ambil Foto & Verifikasi"
-            self.page.update()
-            
-    def frame_to_base64(self, frame):
-        try:
-            _, buffer = cv2.imencode('.jpg', frame)
-            jpg_as_text = base64.b64encode(buffer).decode('utf-8')
-            return jpg_as_text
-        except Exception as e:
-            print(f"Error konversi frame: {e}")
-            return None
+    async def fitur_kamera(self, e):
+        files = await self.camera_picker.pick_files(
+            allow_multiple=False,
+            allowed_extensions=["jpg", "jpeg", "png"],
+            with_data=True
+        )
+
+        print(files)
+
+        if files:
+            self._snack(
+                f"FILE: {files[0].name}",
+                color="green"
+            )
+
+    async def pilih_dari_galeri(self, e):
+        self.bs.open = False
+        self.page.update()
+        files = await self.camera_picker.pick_files(
+            allow_multiple=False,allowed_extensions=["jpg", "jpeg", "png"])
+        print("FILES =", files)
+        if not files:
+            print("TIDAK ADA FILE")
+            return
         
-    def do_capture(self, e):
-        print("DEBUG: Tombol ditekan!")
+        print(type(files[0]))
+        print(files[0].__dict__)
+
+        print("FILE0 =", files[0])
+        print("DIR =", dir(files[0]))
+        print("PATH =", getattr(files[0], "path", None))
+        print("NAME =", getattr(files[0], "name", None))
+        print("BYTES =", getattr(files[0], "bytes", None))
+
+        path_foto = files[0].path
+        print("PATH FOTO =", path_foto)
+        self.show_preview_dialog(path_foto)
+        print("SHOW PREVIEW DIPANGGIL")
+
+    async def do_capture(self, e):
         if not self.geo_ok or self.capturing:
             return
-        
-        # Tambahkan 'file_type=ft.FilePickerFileType.IMAGE' 
-        # dan pastikan browser tahu kita butuh akses kamera
-        self.camera_picker.pick_files(
-            allow_multiple=False,
-            allowed_extensions=["jpg", "png", "jpeg"],
-        )
-    # Cukup hapus tipe data spesifiknya dan ganti dengan e saja
-        def on_camera_result(self, e):
-            # 3. Setelah foto diambil, baru kita tampilkan "preview" 
-            # sebelum benar-benar dikirim ke API
-            if e.files and e.files[0].path:
-                path_foto = e.files[0].path
-                
-                # Di sini kamu bisa buat Dialog/Sheet untuk konfirmasi foto
-                self.show_preview_dialog(path_foto)
+        print("Tombol ambil foto ditekan")
+        files = await self.camera_picker.pick_files(
+            allow_multiple=False,allowed_extensions=["jpg", "jpeg", "png"])
+        print("pick_files selesai")
+        print(files)
 
     def show_preview_dialog(self, path_foto):
-        # Tampilkan preview foto agar siswa merasa yakin fotonya sudah benar
-        dlg = ft.AlertDialog(
+        print(">>> SHOW PREVIEW DIALOG")
+        self.preview_dialog = ft.AlertDialog(
             title=ft.Text("Konfirmasi Foto"),
-            content=ft.Image(src=path_foto, width=300, height=300),
+            content=ft.Image(src=path_foto,width=300,height=300),
             actions=[
-                ft.TextButton("Kirim Absen", on_click=lambda e: self.eksekusi_kirim(path_foto)),
-                ft.TextButton("Batal", on_click=lambda e: self.close_dlg(e))
-            ]
+                ft.TextButton(
+                    "Kirim",on_click=lambda e: self.eksekusi_kirim_final(path_foto)),
+                ft.TextButton(
+                    "Batal",on_click=self.tutup_preview_dialog)
+            ])
+        self.page.show_dialog(self.preview_dialog)
+
+    def tutup_preview_dialog(self, e):
+        self.page.pop_dialog()
+        self.page.update()
+
+    def show_loading_dialog(self):
+        self.loading_dialog = ft.AlertDialog(
+            modal=True,
+            bgcolor=C["surface"],
+            content=ft.Container(
+                width=280,
+                padding=20,
+                content=ft.Column(
+                    controls=[
+                        ft.ProgressRing(),
+                        ft.Text(
+                            "Memverifikasi Presensi...",
+                            size=14,
+                            weight=ft.FontWeight.W_600,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.Text(
+                            "Mohon tunggu, sistem sedang memproses wajah dan lokasi Anda.",
+                            size=11,
+                            color=C["text2"],
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    tight=True,
+                ),
+            ),
         )
-        self.page.dialog = dlg
-        dlg.open = True
-        self.page.update()
 
-    def eksekusi_kirim_final(self, path_foto):
-        self.close_preview()
-        
-        # Tampilkan loading ke user
-        self.page.snack_bar = ft.SnackBar(ft.Text("Mengirim foto ke server..."))
-        self.page.snack_bar.open = True
-        self.page.update()
+        self.page.show_dialog(self.loading_dialog)
 
+    def close_loading_dialog(self):
         try:
-            with open(path_foto, "rb") as file_foto:
-                payload_files = {"file": ("selfie.jpg", file_foto, "image/jpeg")}
-                payload_data = {
-                    "id_siswa": str(self.state.get("user_data", {}).get("id_siswa")),
-                    "latitude": float(self.lat_terakhir),
-                    "longitude": float(self.lon_terakhir)
-                }
-                res = requests.post("http://192.168.1.23:8000/verify-presensi", data=payload_data, files=payload_files, timeout=30)
-            
-            # --- LOGIKA PENANGANAN RESPON ---
-            hasil_api = res.json()
-            if res.status_code == 200 and hasil_api.get("status") == "sukses":
-                waktu_skrg = datetime.now()
-                # Panggil dialog sukses
-                self._show_success_dialog(
-                    nama=str(self.state.get("user_data", {}).get("nama", "Siswa")),
-                    jam=waktu_skrg.strftime("%H:%M WIB"),
-                    status_hadir="Hadir",
-                    status_wa=True,
-                    distance=hasil_api.get("akurasi", 0)
-                )
-            else:
-                self.page.snack_bar = ft.SnackBar(ft.Text(f"Gagal: {hasil_api.get('message')}"), bgcolor="red")
-                self.page.snack_bar.open = True
-                self.page.update()
+            self.page.pop_dialog()
+            self.page.update()
+            print("LOADING DITUTUP")
 
         except Exception as err:
-            print(f"Error kirim API: {err}")
-            self.page.snack_bar = ft.SnackBar(ft.Text("Gagal terhubung ke server!"), bgcolor="red")
-            self.page.snack_bar.open = True
-            self.page.update()
+            print("ERROR CLOSE LOADING =", err)
 
+    def eksekusi_kirim_final(self, path_foto):
+        print("=== MULAI KIRIM KE RAILWAY ===")
+        
+        self.page.pop_dialog()
+        self.page.update()
+       
+        self.show_loading_dialog()
+        try:
+            print("USER DATA =", self.state.get("user_data"))
+            print("LAT =", self.lat_terakhir)
+            print("LON =", self.lon_terakhir)
+            with open(path_foto, "rb") as foto:
+                data = {
+                    "id_siswa": str(
+                        self.state["user_data"]["id_siswa"]
+                    ),
+                    "nama_siswa": str(
+                        self.state["user_data"]["nama"]
+                    ),
+                    "latitude": str(
+                        self.lat_terakhir
+                    ),
+                    "longitude": str(
+                        self.lon_terakhir
+                    )
+                }
+                files = {
+                    "file": (
+                        "selfie.jpg",
+                        foto,
+                        "image/jpeg"
+                    )
+                }
+                print("KIRIM KE RAILWAY...")
+                response = requests.post(
+                    "https://sjakhyakirtibackendapi-production.up.railway.app/verify-presensi",
+                    data=data,
+                    files=files,
+                    timeout=60
+                )
+            print("STATUS =", response.status_code)
+            print("RESPONSE =", response.text)
+            hasil_api = response.json()
+            # ====================================
+            # BERHASIL
+            # ====================================
+            if response.status_code == 200:
+                # refresh dashboard siswa
+                self.state["dashboard_refresh"] = True
+                self.close_loading_dialog()
+                waktu_skrg = datetime.now()
+                self._show_success_dialog(
+                    nama=str(
+                        self.state["user_data"]["nama"]
+                    ),
+                    jam=waktu_skrg.strftime("%H:%M WIB"),
+                    status_hadir=hasil_api.get(
+                        "status_kehadiran",
+                        "-"
+                    ),
+                    status_wa=hasil_api.get(
+                        "status_wa",
+                        False
+                    ),
+                    distance=hasil_api.get(
+                        "akurasi",
+                        0
+                    )
+                )
+
+            # ====================================
+            # GAGAL
+            # ====================================
+            else:
+                print("TUTUP LOADING")
+                self.close_loading_dialog()
+                print("LOADING DITUTUP")
+                self._show_fail_dialog(
+                    hasil_api.get(
+                        "message",
+                        "Presensi gagal."
+                    )
+                )
+        except Exception as err:
+            print("ERROR =", err)
+            self.close_loading_dialog()
+            self._show_fail_dialog(
+                "Gagal terhubung ke server Railway."
+            )
+                
     def _show_success_dialog(self, nama, jam, status_hadir, status_wa, distance):
-        skor_formatted = f"{distance:.2f}% Match" if isinstance(distance, (int, float)) else str(distance)
-
+        print(">>> SHOW SUCCESS DIALOG")
+        skor_formatted = f"{distance:.4f}" if isinstance(distance, (int, float)) else str(distance)
         dlg = ft.AlertDialog(
             modal=True,
             bgcolor=C["surface"],
@@ -274,115 +403,148 @@ class SiswaPresensi:
             content=ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Container(
-                            content=ft.Text("✅", size=40, text_align=ft.TextAlign.CENTER),
-                            alignment="center", width=72, height=72, border_radius=36, bgcolor=C["green_dim"], border=ft.border.all(2, f"{C['green']}40"),
+                        ft.Text(
+                            "✅",
+                            size=40,
+                            text_align=ft.TextAlign.CENTER
                         ),
                         ft.Text(
                             "Presensi Berhasil!",
-                            size=18, weight=ft.FontWeight.W_800, color=C["green"], text_align=ft.TextAlign.CENTER,
+                            size=18,
+                            weight=ft.FontWeight.W_800,
+                            color=C["green"],
+                            text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Text(
-                            "Wajah berhasil diverifikasi ArcFace Server.\nLaporan sukses masuk sistem cloud.", size=13, color=C["text2"], text_align=ft.TextAlign.CENTER,
+                            "Wajah berhasil diverifikasi ArcFace Server.\nLaporan sukses masuk sistem cloud.",
+                            size=13,
+                            color=C["text2"],
+                            text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Container(
                             content=ft.Column(
                                 controls=[
                                     self._detail_row("Nama", nama),
                                     self._detail_row("Jam Masuk", jam),
-                                    self._detail_row("Status", status_hadir,
-                                                     value_color=C["green"] if "Tepat" in status_hadir else "red"),
-                                    self._detail_row("Lokasi", "✓ Radius Aman",
-                                                     value_color=C["green"]),
-                                    self._detail_row("ArcFace Score", skor_formatted, 
-                                                     value_color=C["blue"]),
-                                    self._detail_row("WA Gateway", 
-                                                     "✓ Diproses Cloud" if status_wa else "✗ Gagal",
-                                                     value_color=C["green"] if status_wa else "red"),
+                                    self._detail_row("Status", status_hadir, value_color=C["green"]
+                                                     if "Tepat" in status_hadir else "red"),
+                                    self._detail_row("Lokasi", "✓ Radius Aman", value_color=C["green"]),
+                                    self._detail_row("Cosine Distance", skor_formatted, value_color=C["blue"]),       
+                                    self._detail_row("WA Gateway", "✓ Terkirim" if status_wa else "✗ Gagal", value_color=C["green"] if status_wa else "red"),      
                                 ],
                                 spacing=0,
                             ),
-                            bgcolor=C["surface2"], border_radius=10, border=ft.border.all(1, C["border"]), padding=12,
+                            bgcolor=C["surface2"],
+                            border_radius=10,
+                            border=ft.border.all(1, C["border"]),
+                            padding=12,
                         ),
-                        ft.Container(
-                            content=ft.Text(
-                                "Selesai", size=14, weight=ft.FontWeight.W_700, color="#FFFFFF", text_align=ft.TextAlign.CENTER,
+                        ft.TextButton(
+                            content=ft.Container(
+                                width=220,
+                                bgcolor=C["green"],
+                                border_radius=10,
+                                padding=ft.Padding(
+                                    top=10,
+                                    bottom=10
+                                ),
+                                content=ft.Text(
+                                    "Selesai",
+                                    size=13,
+                                    weight=ft.FontWeight.W_700,
+                                    color="#FFFFFF",
+                                    text_align=ft.TextAlign.CENTER,
+                                ),
                             ),
-                            bgcolor=C["green"], border_radius=10, padding=ft.padding.symmetric(vertical=12),
-                            on_click=lambda e: self._close_dialog(),
-                            ink=True,
-                        ),
+                            on_click=lambda e: self._close_success_dialog(e)
+                        )
                     ],
-                    spacing=12, horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    spacing=12, 
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    tight=True,
                 ),
-                width=300, padding=4,
+                width=300, 
+                padding=4,
             ),
         )
-        self.page.overlay.append(dlg)
-        dlg.open = True
-        self.page.update()
         self._active_dlg = dlg
+        self.page.show_dialog(dlg)
 
-    def _close_dialog(self):
-        self._active_dlg.open = False
-        self.page.update()
-        self.go_to("/siswa", tab=0)
+    def _close_success_dialog(self, e):
+        print("TUTUP SUCCESS")
 
-    def _show_fail_dialog(self):
+        try:
+            self.page.pop_dialog()
+            self.page.update()
+        except Exception as err:
+            print("ERROR =", err)
+
+    def _show_fail_dialog(self, pesan):
         dlg = ft.AlertDialog(
             modal=True,
             bgcolor=C["surface"],
-            shape=ft.RoundedRectangleBorder(radius=20),
             content=ft.Container(
+                width=280,
+                height=180,
+                padding=20,
                 content=ft.Column(
+                    spacing=12,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        ft.Container(
-                            content=ft.Text("❌", size=36, text_align=ft.TextAlign.CENTER),
-                            alignment="center", width=68, height=68, border_radius=34, bgcolor=C["red_dim"],border=ft.border.all(2, f"{C['red']}40"),
-                        ),
-                        ft.Text("Lokasi Tidak Valid", size=17,
-                                weight=ft.FontWeight.W_800, color=C["red"],
-                                text_align=ft.TextAlign.CENTER),
                         ft.Text(
-                            "Anda berada di luar radius sekolah.\nPresensi hanya bisa dilakukan di area sekolah.",
-                            size=12, color=C["text2"],
+                            "❌",
+                            size=36,
                             text_align=ft.TextAlign.CENTER,
                         ),
-                        ft.Container(
-                            content=ft.Text("Tutup", size=13,
-                                            weight=ft.FontWeight.W_700, color=C["red"], text_align=ft.TextAlign.CENTER),
-                            bgcolor=C["red_dim"],border_radius=10,
-                            border=ft.border.all(1, f"{C['red']}40"),
-                            padding=ft.padding.symmetric(vertical=10),
-                            on_click=lambda e: self._close_fail(),
-                            ink=True,
+
+                        ft.Text(
+                            "Presensi Gagal",
+                            size=17,
+                            weight=ft.FontWeight.W_800,
+                            color=C["red"],
+                            text_align=ft.TextAlign.CENTER,
                         ),
+
+                        ft.Text(
+                            pesan,
+                            size=12,
+                            color=C["text2"],
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.TextButton(
+                            "Tutup",
+                            on_click=lambda e: (
+                                print("TOMBOL TUTUP DIKLIK"),
+                                self._close_fail_dialog(e)
+                            )
+                        )
                     ],
-                    spacing=12,horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    tight=True,
                 ),
-                width=280,padding=4,
             ),
         )
-        self.page.overlay.append(dlg)
-        dlg.open = True
-        self.page.update()
         self._fail_dlg = dlg
+        self.page.show_dialog(dlg)
 
-    def _close_fail(self):
-        self._fail_dlg.open = False
-        self.page.update()
+    def _close_fail_dialog(self, e):
+        print("MASUK CLOSE FAIL DIALOG")
+
+        try:
+            self.page.pop_dialog()
+            self.page.update()
+        except Exception as err:
+            print("ERROR CLOSE =", err)
 
     def _detail_row(self, key, val, value_color=None):
         return ft.Container(
             content=ft.Row(
                 controls=[
                     ft.Text(key, size=12, color=C["text2"], expand=True),
-                    ft.Text(val, size=12, weight=ft.FontWeight.W_600,
-                            color=value_color or C["text"]),
+                    ft.Text(val, size=12, weight=ft.FontWeight.W_600, color=value_color or C["text"]),
                 ]
             ),
-            border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-            padding=ft.padding.symmetric(vertical=6),
+            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+            padding=ft.Padding(top=6, bottom=6),
         )
 
     def build(self) -> ft.Container:
@@ -391,12 +553,10 @@ class SiswaPresensi:
             step_rows.append(
                 ft.Row(
                     controls=[
-                        ft.Container(
-                            width=8, height=8,border_radius=99,bgcolor=C["border2"],
-                        ),
+                        ft.Container(width=8, height=8, border_radius=99, bgcolor=C["border2"]),
                         ft.Text(s, size=12, color=C["text2"]),
                     ],
-                    spacing=10,vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 )
             )
 
@@ -411,178 +571,103 @@ class SiswaPresensi:
             ref=self.geo_ref,
             content=geo_indicator(True).content, bgcolor=C["green_dim"], border_radius=8,
             border=ft.border.all(1, f"{C['green']}30"),
-            padding=ft.padding.symmetric(horizontal=12, vertical=8),
-            margin=ft.margin.only(bottom=12),
+            padding=ft.Padding(left=12,right=12,top=8,bottom=8),
+            margin=ft.Margin(bottom=12),
         )
 
         cam_box = ft.Container(
-            content=ft.Stack(
-                controls=[
-                    ft.Container(
-                        content=ft.Column(
-                            controls=[
-                                ft.Text("📷", size=40, text_align=ft.TextAlign.CENTER),
-                                ft.Text("Kamera selfie real-time",
-                                        size=12, color=C["text3"],
-                                        text_align=ft.TextAlign.CENTER),
-                            ],
-                            alignment=ft.MainAxisAlignment.CENTER,
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=8,
-                        ),
-                        alignment="center",
-                        expand=True,
-                    ),
-                    ft.Container(
-                        width=110, height=110,
-                        border_radius=55,
-                        border=ft.border.all(2, f"{C['blue']}60"),
-                        alignment="center",
-                    ),
-                ],
-                alignment="center",
-            ),
-            height=260,
+            height=250,
             bgcolor=C["surface2"],
             border_radius=12,
             border=ft.border.all(1, C["border"]),
-            margin=ft.margin.only(bottom=14),
-            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-        )
-
-        capture_btn = ft.Container(
-            ref=self.btn_absen_ref,
-            content=ft.Row(
-                controls=[
-                    ft.Icon("camera_alt_outlined", color="white"),
-                    ft.Text(
-                        "Ambil Foto & Verifikasi", 
-                        ref=self.btn_text_ref,
-                        size=14, 
-                        weight=ft.FontWeight.W_600, 
-                        color="white"
-                    ),
-                ],
+            margin=ft.Margin(bottom=14),
+            padding=20,
+            on_click=self.run_real_process, 
+            content=ft.Column( 
                 alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            bgcolor="#1A4BD4",
-            padding=ft.padding.symmetric(vertical=16),
-            border_radius=12,
-            on_click=self.run_real_process,
-            ink=True,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Text("📷", size=40),
+                    ft.Text("Ambil Foto dan Verifikasi Kehadiran", size=12, color="black"),
+                ]
+            )
         )
-
+        
         gps_row = ft.Container(
             content=ft.Row(
                 controls=[
                     ft.Text("GPS Asli (Anti-Mock)", size=12, color=C["text2"], expand=True),
-                    ft.Text(
-                        ref=self.gps_text_ref,
-                        value="✓ Aman" if not self.is_fake_gps else "✗ Terdeteksi",
-                        size=12, weight=ft.FontWeight.W_700,
-                        color=C["green"] if not self.is_fake_gps else C["red"],
-                    ),
+                    ft.Text(ref=self.gps_text_ref, value="✓ Aman" if not self.is_fake_gps else "✗ Terdeteksi", size=12, weight=ft.FontWeight.W_700, color=C["green"] if not self.is_fake_gps else C["red"]),
                 ]
             ),
-            border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-            padding=ft.padding.symmetric(vertical=7),
+            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+            padding=ft.Padding(top=7,bottom=7),
         )
         
-        other_checks = [
-            ("VPN Aktif",           True),
-        ]
+        other_checks = [("VPN Aktif", True)]
         other_rows = [
             ft.Container(
                 content=ft.Row(
                     controls=[
                         ft.Text(lbl, size=12, color=C["text2"], expand=True),
-                        ft.Text(
-                            "✓ Aman" if ok else "✗ Terdeteksi",
-                            size=12, weight=ft.FontWeight.W_700,
-                            color=C["green"] if ok else C["red"],
-                        ),
+                        ft.Text("✓ Aman" if ok else "✗ Terdeteksi", size=12, weight=ft.FontWeight.W_700, color=C["green"] if ok else C["red"]),
                     ]
                 ),
-                border=ft.border.only(bottom=ft.BorderSide(1, C["border"])),
-                padding=ft.padding.symmetric(vertical=7),
-            )
-            for lbl, ok in other_checks
+                border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+                padding=ft.Padding(top=7,bottom=7),
+            ) for lbl, ok in other_checks
         ]
         
         integrity_card = ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Text("🛡️ Integritas Perangkat", size=13,
-                                    weight=ft.FontWeight.W_700, color=C["text"]),
-                        ]
-                    ),
+                    ft.Row([ft.Text("🛡️ Integritas Perangkat", size=13, weight=ft.FontWeight.W_700, color=C["text"])]),
                     ft.Container(height=8),
                     gps_row,
                     *other_rows,
                     ft.Container(height=8),
                     ft.Container(
-                        content=ft.Text(
-                            "Toggle Lokasi GPS (Demo)",
-                            size=12, weight=ft.FontWeight.W_600,
-                            color=C["text2"],
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        border_radius=8,
-                        border=ft.border.all(1, C["border2"]),
-                        padding=ft.padding.symmetric(horizontal=14, vertical=8),
-                        on_click=self.toggle_geo,
-                        ink=True,
+                        content=ft.Text("Toggle Lokasi GPS (Demo)", size=12, weight=ft.FontWeight.W_600, color=C["text2"], text_align=ft.TextAlign.CENTER),
+                        border_radius=8, border=ft.border.all(1, C["border2"]), padding=ft.Padding(left=14,right=14,top=8,bottom=8),
+                        on_click=self.toggle_geo, ink=True,
                     ),
                 ],
                 spacing=0,
             ),
-            bgcolor=C["surface"],
-            border_radius=12,
-            border=ft.border.all(1, C["border"]),
-            padding=16,
-            margin=ft.margin.only(bottom=12),
+            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16, margin=ft.Margin(bottom=12),
         )
 
         return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Container(
-                        content=ft.Row(
-                            controls=[
-                                ft.Text("Verifikasi Presensi", size=15,
-                                        weight=ft.FontWeight.W_700, color=C["text"],
-                                        expand=True),
-                                chip("Selfie Mode", "blue"),
-                            ],
+            expand=True,
+            bgcolor=C["bg"], # Background asli kamu
+            content=ft.SafeArea(
+                content=ft.Column(
+                    spacing=0,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    controls=[
+                        # 1. Header
+                        ft.Container(
+                            bgcolor=C["surface"],
+                            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+                            padding=16,
+                            content=ft.Row([
+                                ft.Text("Verifikasi Presensi", size=15, weight=ft.FontWeight.W_700, color=C["text"], expand=True), 
+                                chip("Selfie Mode", "blue")
+                            ]),
                         ),
-                        bgcolor=C["surface"],
-                        border=ft.border.only(
-                            bottom=ft.BorderSide(1, C["border"])
-                        ),
-                        padding=ft.padding.symmetric(horizontal=16, vertical=12),
-                    ),
-                    ft.Container(
-                        content=ft.Column(
+                        
+                        # 2. ListView (Area Isi)
+                        ft.ListView(
+                            expand=True,
+                            padding=16,
+                            spacing=12,
                             controls=[
-                                ft.Container(height=4),
                                 geo_cont,
                                 cam_box,
-                                step_col,
-                                capture_btn,
                                 integrity_card,
-                                ft.Container(height=16),
-                            ],
-                            spacing=0,
-                            scroll=ft.ScrollMode.AUTO,
-                        ),
-                        expand=True,
-                        padding=ft.padding.symmetric(horizontal=16),
-                    ),
-                ],
-                spacing=0,
-            ),
-            expand=True,
-            bgcolor=C["bg"],
+                            ]
+                        ) 
+                    ]
+                )
+            )
         )

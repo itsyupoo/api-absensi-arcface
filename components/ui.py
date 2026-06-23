@@ -227,7 +227,7 @@ def wa_status_bar(active: bool = True, total_pesan: int = 0) -> ft.Container:
     """Status bar WhatsApp Gateway dengan data real-time."""
     color = C["green"] if active else C["red"]
     title = "Terhubung · Fonnte API" if active else "Tidak Terhubung"
-    sub   = f"{total_pesan} pesan terkirim hari ini" if active else "Periksa koneksi gateway"
+    sub   = f"{total_pesan} absensi tercatat hari ini" if active else "Periksa koneksi gateway"
     return ft.Container(
         content=ft.Row(
             controls=[

@@ -64,18 +64,29 @@ class SiswaProfil:
             )
 
         return ft.Container(
-            bgcolor=C["bg"],
             expand=True,
+            bgcolor=C["bg"],
             content=ft.Column(
                 spacing=0,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
-                    # 1. Header: Kita beri padding atas lebih besar (top=50)
+                    # 1. Header dengan latar biru penuh, SafeArea membungkus teks saja
                     ft.Container(
                         bgcolor="#0D47A1",
                         border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
-                        padding=ft.Padding(left=20, right=16, top=50, bottom=20),
-                        width=float("inf"),
-                        content=ft.Text("PROFIL SAYA", size=35, weight=ft.FontWeight.W_900, color="white", text_align=ft.TextAlign.CENTER,),
+                        # Padding atas ditangani SafeArea
+                        content=ft.SafeArea(
+                            ft.Container(
+                                padding=ft.Padding(left=20, right=16, top=20, bottom=20),
+                                content=ft.Text(
+                                    "PROFIL SAYA", 
+                                    size=35, 
+                                    weight=ft.FontWeight.W_900, 
+                                    color="white", 
+                                    text_align=ft.TextAlign.CENTER
+                                ),
+                            )
+                        ),
                     ),
                     # 2. Konten Profil: Kita beri padding atas (top=20) agar kotak turun
                     ft.Container(

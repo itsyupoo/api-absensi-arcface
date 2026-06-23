@@ -1,0 +1,36 @@
+[project]
+name = "presensi-app"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Flet developer", email = "you@example.com" }
+]
+dependencies = [
+    "flet>=0.85.3",
+    "mysql-connector-python>=9.7.0",
+    "requests>=2.34.2",
+    "pillow>=12.2.0",
+    "numpy>=2.4.6",
+    "opencv-python>=4.13.0.92",
+    "pandas>=3.0.3",
+    "openpyxl>=3.1.5",
+    "plyer>=2.1.0"
+]
+
+[dependency-groups]
+dev = [
+    "flet-cli>=0.85.3",
+    "flet-desktop>=0.85.3",
+    "flet-web>=0.85.3",
+]
+
+[tool.flet]
+org = "com.mycompany"
+product = "presensi-app"
+company = "Flet"
+copyright = "Copyright (C) 2023-2026 by Flet"
+
+[tool.flet.app]
+path = "."

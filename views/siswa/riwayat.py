@@ -45,9 +45,6 @@ class SiswaRiwayat:
         stats = data["stats"]
         logs = data["logs"]
 
-        print(f"DEBUG: Data statistik yang diterima: {stats}")
-        print(f"DEBUG: Data log yang diterima: {logs}")
-
         # Definisi rekap_card (Gunakan ini untuk menggantikan yang lama)
         rekap_card = ft.Container(
             bgcolor=C["surface"],
@@ -112,19 +109,25 @@ class SiswaRiwayat:
        
         # Main return
         return ft.Container(
-            bgcolor=C["bg"],
             expand=True,
-            content=ft.Column(
-                spacing=0,
-                controls=[
-                    # 1. Header (Kembali dimunculkan)
-                    ft.Container(
-                        content=ft.Text("Riwayat Kehadiran", size=18, weight="bold", color=C["text"]),
-                        bgcolor=C["surface"],
-                        width=float("inf"),
-                        padding=ft.Padding(left=16, right=16, top=40, bottom=16),
-                        border=ft.Border(bottom=ft.border.BorderSide(1, C["border"]))
-                    ),
+            bgcolor=C["bg"],
+            content=ft.SafeArea(
+                ft.Column(
+                    spacing=0,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    controls=[
+                        # 1. Header yang sudah disamakan polanya
+                        ft.Container(
+                            bgcolor=C["surface"],
+                            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
+                            padding=16,
+                            content=ft.Text(
+                                "Riwayat Kehadiran",
+                                size=18,
+                                weight=ft.FontWeight.W_700,
+                                color=C["text"]
+                            ),
+                        ),
                     # 2. Body (Scrollable)
                     ft.Container(
                         padding=16,
@@ -142,10 +145,11 @@ class SiswaRiwayat:
                                         ft.Text("📋 Log Harian", size=14, weight=ft.FontWeight.W_700, color=C["text"]),
                                         *log_controls # Semua log muncul di sini
                                     ])
-                                )
-                            ]
-                        )
+                            )
+                        ]
                     )
-                ]
-            )
+                )
+            ]
         )
+    )
+)

@@ -7,7 +7,7 @@ import requests
 # ============================================================
 # KONFIGURASI DATABASE & API SERVER CLOUD
 # ============================================================
-BASE_URL_API = "https://api-absensi-arcface-production.up.railway.app"
+BASE_URL_API = "https://sjakhyakirtibackendapi-production.up.railway.app"
 
 def get_db_connection():
     try:
@@ -17,7 +17,8 @@ def get_db_connection():
             user="root",
             password="WvjsVeVkcyvgqYyLIEiHBTRgLFkzWAzK",
             database="railway", 
-            port=33414
+            port=33414,
+            connection_timeout=10
         )
     except mysql.connector.Error as err:
         print(f"Error Database Cloud: {err}")

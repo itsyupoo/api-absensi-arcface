@@ -1,6 +1,7 @@
 # views/admin/monitoring.py
 
 import flet as ft
+print("FLET VERSION =", ft.__version__)
 import threading
 import time
 from database_connect import ambil_presensi_terbaru, get_db_connection, hitung_wa_terkirim_hari_ini
@@ -11,10 +12,10 @@ class AdminMonitoring:
         self.page  = page
         self.state = state
         self.go_to = go_to
-
         self.log_container_ref = ft.Ref[ft.Column]()
         self.search_field_ref = ft.Ref[ft.TextField]()
-        
+        self.filter_status = "Semua"
+        self.current_search = ""
         self.running = True
         threading.Thread(target=self._auto_refresh_task, daemon=True).start()
 
@@ -27,18 +28,18 @@ class AdminMonitoring:
     def _auto_refresh_task(self):
         """Thread untuk memperbarui data setiap 5 detik secara otomatis"""
         while self.running:
-            if self.search_field_ref.current and not self.search_field_ref.current.value:
-                self._load_data_to_ui()
+            self._load_data_to_ui(
+                search_name=self.current_search,
+                status_filter=self.filter_status
+            )
             time.sleep(5)
 
-    def _load_data_to_ui(self, search_name=None):
+    def _load_data_to_ui(self, search_name=None, status_filter="Semua"):
         """Mengambil data dari DB dan merender ulang list di UI"""
-        if search_name:
-            # Jika ada pencarian, ambil semua riwayat siswa tersebut
-            logs = self._ambil_riwayat_siswa_spesifik(search_name)
-        else:
-            # Jika tidak ada pencarian, ambil 10 presensi terbaru hari ini
-            logs = ambil_presensi_terbaru(limit=10)
+        logs = self._ambil_log_monitoring(
+            search_name=search_name,
+            status_filter=status_filter
+        )
 
         rows = []
         for res in logs:
@@ -61,55 +62,93 @@ class AdminMonitoring:
                 cls_color=status_color,
                 jenis_kelamin=jk
             ))
-
+        
         if self.log_container_ref.current:
             self.log_container_ref.current.controls = rows
             self.page.update()
 
-    def _ambil_riwayat_siswa_spesifik(self, nama):
-        """Fungsi internal untuk mencari riwayat kehadiran berdasarkan nama"""
+    def _ambil_log_monitoring(self,search_name="",status_filter="Semua"):
         conn = get_db_connection()
         hasil = []
         if conn:
             try:
                 cursor = conn.cursor(dictionary=True)
                 query = """
-                    SELECT s.nama, s.kelas, s.jenis_kelamin, c.waktu_absen,
-                           CASE WHEN TIME(c.waktu_absen) <= '07:15:00' THEN 'Hadir' ELSE 'Terlambat' END as status
-                    FROM catatan_kehadiran c
-                    JOIN dataset_siswa s ON c.id_siswa = s.id_siswa
-                    WHERE s.nama LIKE %s
-                    ORDER BY c.waktu_absen DESC
+                    SELECT s.nama,
+                    s.kelas,
+                    s.jenis_kelamin,
+                    c.waktu_absen,
+                    CASE
+                        WHEN TIME(c.waktu_absen) <= '07:15:00'
+                        THEN 'Hadir'
+                        ELSE 'Terlambat'
+                    END as status
+                FROM catatan_kehadiran c
+                JOIN dataset_siswa s
+                ON c.id_siswa = s.id_siswa
+                WHERE 1=1
                 """
-                cursor.execute(query, (f"%{nama}%",))
+
+                params = []
+
+                if search_name and search_name.strip():
+                    query += " AND s.nama LIKE %s"
+                    params.append(f"%{search_name.strip()}%")
+
+                if status_filter == "Hadir":
+                    query += """
+                    AND TIME(c.waktu_absen) <= '07:15:00'
+                    """
+
+                elif status_filter == "Terlambat":
+                    query += """
+                    AND TIME(c.waktu_absen) > '07:15:00'
+                    """
+
+                query += """
+                ORDER BY c.waktu_absen DESC
+                LIMIT 50
+                """
+                print(query)
+                print(params)
+
+                cursor.execute(query, tuple(params))
                 hasil = cursor.fetchall()
             finally:
                 conn.close()
         return hasil
+    
+    def _on_search_change(self, e):
+        self.current_search = e.control.value.strip()
+
+        self._load_data_to_ui(
+            search_name=self.current_search,
+            status_filter=self.filter_status
+        )
+
+    def _on_filter_change(self, e):
+        self.filter_status = e.control.value
+
+        self._load_data_to_ui(
+            search_name=self.current_search,
+            status_filter=self.filter_status
+        )
 
     def _create_log_row(self, nama, kelas, jam, status, cls_color, jenis_kelamin):
         from components.ui import C, chip 
-
-        if jenis_kelamin in ["L", "Laki-laki", "Laki-Laki"]:
-            path_avatar = "logo_cowok.png"
-        else:
-            path_avatar = "logo_cewek.png"
-
         return ft.Container(
             content=ft.Row(
                 controls=[
-                    ft.Container(
-                        content=ft.Image(src=path_avatar,fit="contain",width=24,height=24,
-                        ),
-                        width=35, height=35, bgcolor=C["surface2"], border_radius=8, 
-                        alignment="center"
+                   ft.Icon(
+                        ft.Icons.PERSON,
+                        size=24
                     ),
                     ft.Column([
-                        ft.Text(nama, size=13, weight="bold", color=C["text"]),
-                        ft.Text(kelas, size=11, color=C["text2"])
+                        ft.Text(nama, size=12, weight="bold", color=C["text"]),
+                        ft.Text(kelas, size=10, color=C["text2"])
                     ], expand=True, spacing=1),
-                    ft.Text(f"{jam} WIB", size=11, color=C["text2"], font_family="monospace"),
-                    chip(status, cls_color)
+                    chip(status, cls_color),
+                    ft.Text(f"{jam} WIB", size=11, color=C["text2"], font_family="monospace"),   
                 ]
             ),
             padding=ft.Padding(top=10, bottom=10, left=0, right=0),
@@ -117,14 +156,16 @@ class AdminMonitoring:
         )
 
     def build(self) -> ft.Container:
-        self.log_list_column = ft.Column(ref=self.log_container_ref, spacing=0)
-        self._load_data_to_ui()
-
+        self.log_list_column = ft.Column(ref=self.log_container_ref, spacing=0, height=400, scroll=ft.ScrollMode.AUTO,)
+        self._load_data_to_ui(
+            status_filter=self.filter_status
+        )
+        
         search_box = ft.TextField(
             ref=self.search_field_ref,
             hint_text="Cari nama siswa untuk riwayat...",
             prefix_icon=ft.Icons.SEARCH,
-            on_change=lambda e: self._load_data_to_ui(e.control.value),
+            on_change=self._on_search_change,
             bgcolor=C["surface2"], border_color=C["border2"], focused_border_color=C["blue"], color=C["text"],  hint_style=ft.TextStyle(color=C["text3"]),
             border_radius=8, content_padding=ft.Padding(left=12, right=12, top=8, bottom=8), expand=True)
 
@@ -134,7 +175,6 @@ class AdminMonitoring:
                     ft.Row(
                         controls=[
                             section_title("📡 Log Real-time"),
-                            chip("● Live", "green"),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
@@ -148,6 +188,7 @@ class AdminMonitoring:
                                     ft.dropdown.Option("Hadir"),
                                     ft.dropdown.Option("Terlambat"),
                                 ],
+                                #on_change=self._on_filter_change,
                                 value="Semua",
                                 bgcolor=C["surface2"],
                                 border_color=C["border2"],

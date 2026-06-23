@@ -15,21 +15,15 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor = "#FFFFFF"
     page.padding = 0
-    
-    # ── PENGAMAN LAYOUT ADAPTIF & RESPONSIF HP/LAPTOP ──
-    # Jika lebar layar terdeteksi kecil (misal di bawah 600px seperti HP Android)
-    if page.width < 600:
-        # Mengompakkan jarak/padding bawaan seluruh komponen Flet
+    screen_width = page.width or 1200
+    if screen_width < 600:
         page.theme = ft.Theme(visual_density=ft.VisualDensity.COMPACT)
-        # Melakukan zoom-out global sebesar 15% agar teks raksasa menyusut otomatis
-        page.zoom = 0.85 
+        page.zoom = 0.85
     else:
-        # Tampilan normal jika dibuka lewat layar lebar Laptop
         page.theme = ft.Theme(visual_density=ft.VisualDensity.STANDARD)
         page.zoom = 1.0
-
-    # Menggabungkan skema warna primer/sekunder milikmu ke dalam tema
-    page.theme.color_scheme = ft.ColorScheme(
+        # Menggabungkan skema warna primer/sekunder milikmu ke dalam tema
+        page.theme.color_scheme = ft.ColorScheme(
         primary="#4F55F7",
         secondary="#4F55F7",
         surface="#FFFFFF",
@@ -61,7 +55,6 @@ def main(page: ft.Page):
             )
         else:
             page.views.append(LoginView(page, state, go_to).build())
-
         page.update()
 
     def go_to(route, tab=None):
@@ -109,11 +102,8 @@ def build_siswa_shell(page, state, go_to, active_tab=0):
         state["current_tab_siswa"] = idx
                 
         if content_ref.current:
-            # Mengganti konten
             content_ref.current.content = render_tab(idx)
-            # Update container agar layar refresh konten baru
             content_ref.current.update() 
-            # Update page agar navigasi menyadari perubahan (opsional)
             page.update()
         else:
             print("DEBUG: ERROR - Ref tidak ditemukan!")
@@ -125,12 +115,12 @@ def build_siswa_shell(page, state, go_to, active_tab=0):
         bgcolor="#0D47A1",
         destinations=[
             ft.NavigationBarDestination(
-                icon=ft.Icons.HOME_OUTLINED, 
-                selected_icon=ft.Icons.HOME_ROUNDED, 
-                label=t[0]
-            ) for t in tabs
-        ],
-    )
+            icon=[ft.Icons.HOME_OUTLINED, ft.Icons.CAMERA_ALT_OUTLINED, ft.Icons.LIST_ALT_OUTLINED, ft.Icons.PERSON_OUTLINED][i],
+            selected_icon=[ft.Icons.HOME_ROUNDED, ft.Icons.CAMERA_ALT, ft.Icons.LIST_ALT, ft.Icons.PERSON_ROUNDED][i],
+            label=t[0]
+        ) for i, t in enumerate(tabs)
+    ],
+)
 
     # 2. Body (Gunakan expand=True agar mengisi ruang tersisa)
     body = ft.Container(
@@ -170,6 +160,7 @@ def build_admin_shell(page, state, go_to, active_tab=0):
         return ViewClass(page, state, go_to).build()
 
     def on_tab_change(e):
+        page.overlay.clear()
         state["current_tab_admin"] = e.control.selected_index
         content_ref.current.content = render_tab(e.control.selected_index)
         page.update()
@@ -202,6 +193,9 @@ def build_admin_shell(page, state, go_to, active_tab=0):
     )
 
 
-# Menjalankan server lokal agar bisa ditembak langsung via HP Android
 if __name__ == "__main__":
-        ft.app(target=main)
+    ft.app(
+        target=main, 
+        assets_dir="assets", # Mengunci folder logo/gambar agar ikut terbawa ke APK
+        view=ft.AppView.WEB_BROWSER, # Diperlukan untuk simulasi multi-device via IP
+    )

@@ -28,12 +28,10 @@ class LoginView:
         hasil = proses_login(username, password)
 
         if hasil["status"] == "success":
-            # Jika berhasil, pindah ke halaman utama/dashboard
             role = hasil["data"].get("role")
             self.state["user_data"] = hasil["data"] 
             self.state["user_role"] = hasil["data"].get("role")
             
-            role = hasil["data"].get("role")
             if role == "admin":
                 self.go_to("/admin")
             else:

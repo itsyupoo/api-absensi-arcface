@@ -12,79 +12,108 @@ class AdminDashboard:
         self.page = page
         self.state = state
         self.go_to = go_to
-
-        # Penampung Referensi UI
         self.ref_total = ft.Ref[ft.Text]()
         self.ref_hadir = ft.Ref[ft.Text]()
         self.ref_lambat = ft.Ref[ft.Text]()
         self.ref_belum = ft.Ref[ft.Text]()
+        self.ref_wa_card = ft.Ref[ft.Container]()
+        self.ref_wa_total = ft.Ref[ft.Text]()
+        self.ref_wa_sub = ft.Ref[ft.Text]()
         self.ref_list_presensi = ft.Ref[ft.Column]()
-
         self.ref_bars = [ft.Ref[ft.Container]() for _ in range(7)]
         self.ref_bar_texts = [ft.Ref[ft.Text]() for _ in range(7)]
 
     def _buat_baris_tabel(self, nama, kelas, jam, status, jenis_kelamin):
         color = "green" if status == "Hadir" else "#FF0800"
-        
-        if jenis_kelamin in ["L", "Laki-laki", "Laki-Laki"]:
-            path_avatar = "logo_cowok.png"
-        else:
-            path_avatar = "logo_cewek.png"
 
         return ft.Container(
             content=ft.Row(
                 controls=[
                     ft.Container(
-                       content=ft.Image(src=path_avatar,fit="contain",width=24,height=24),
-                        width=30, height=30, bgcolor=C["surface2"],border_radius=8, 
-                        border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])),
-                        alignment="center",
-                    ),    
-                    ft.Text(nama, size=12, weight=ft.FontWeight.W_700, color=C["text"], expand=True),
-                    ft.Text(kelas, size=11, color=C["text2"], width=70),
-                    ft.Text(jam, size=11, color=C["text2"], font_family="monospace", width=52),
+                        content=ft.Text(
+                            nama,
+                            size=12,
+                            weight=ft.FontWeight.W_700,
+                            color=C["text"]
+                        ),
+                        expand=True,
+                    ),
+                    ft.Text(
+                        kelas,
+                        size=11,
+                        color=C["text2"],
+                        width=70
+                    ),
+                    ft.Text(
+                        jam,
+                        size=11,
+                        color=C["text2"],
+                        width=52
+                    ),
                     chip(status, color),
                 ],
-                spacing=8,
+                spacing=8, 
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
-            padding=ft.Padding(0, 9, 0, 9),
+            border=ft.Border(bottom=ft.BorderSide(1, C["border"])), 
+            padding=9,
         )
-
     async def update_dashboard_periodic(self):
         while True:
             try:
                 stats = ambil_statistik_dashboard()
                 terbaru = ambil_presensi_terbaru(limit=5)
+                rekap = ambil_rekap_7_hari()
+                total_wa = hitung_wa_terkirim_hari_ini()
 
                 if self.ref_total.current: self.ref_total.current.value = str(stats['total'])
                 if self.ref_hadir.current: self.ref_hadir.current.value = str(stats['hadir'])
                 if self.ref_lambat.current: self.ref_lambat.current.value = str(stats['terlambat'])
                 if self.ref_belum.current: self.ref_belum.current.value = str(stats['belum'])
-
+                nilai_tertinggi = max([row[1] for row in rekap]) if rekap else 0
+                limit_grafik = max(nilai_tertinggi, 40)
+                for i, (_, val) in enumerate(rekap):
+                    if i >= len(self.ref_bars):
+                        break
+                    tinggi = int((val / limit_grafik) * 80) if val > 0 else 4
+                    if self.ref_bars[i].current:
+                        self.ref_bars[i].current.height = tinggi
+                    if self.ref_bar_texts[i].current:
+                        self.ref_bar_texts[i].current.value = str(val)
+                if self.ref_wa_card.current:
+                    self.ref_wa_card.current.content = ft.Column([
+                        section_title("📱 Gateway WhatsApp"),
+                        ft.Container(height=10),
+                        wa_status_bar(
+                            active=True,
+                            total_pesan=total_wa
+                        ),
+                    ])
                 if self.ref_list_presensi.current:
                     self.ref_list_presensi.current.controls.clear()
                     for p in terbaru:
+                        print("MASUK LOOP:", p["nama"])
                         jam_str = p['waktu_absen'].strftime("%H:%M")
                         jk = p.get('jenis_kelamin', 'L')
+                        print("APPEND BERHASIL")
                         self.ref_list_presensi.current.controls.append(
-                            self._buat_baris_tabel(p['nama'], p['kelas'], jam_str, p['status'], jk)
+                            self._buat_baris_tabel(p['nama'], p['kelas'], jam_str, p['status'], jk),
                         )
                 
                 self.page.update()
             except Exception as e:
                 print(f"Polling Error: {e}")
             
-            await asyncio.sleep(60)
+            await asyncio.sleep(5)
 
     def proses_export_excel(self, _):
+        print("TOMBOL EXPORT DIKLIK")
         # 1. Ambil data dari MySQL
         db = get_db_connection() # Fungsi koneksi DB kamu
         if db:
             try:
                 cursor = db.cursor(dictionary=True)
-                # Query ambil data riwayat presensi hari ini
+                # Query ambil data riwayat presensi 
                 query = """
                     SELECT c.waktu_absen, s.nama, s.kelas, 
                            CASE WHEN TIME(c.waktu_absen) <= '07:15:00' THEN 'Hadir' ELSE 'Terlambat' END as status
@@ -189,12 +218,10 @@ class AdminDashboard:
                     style=ft.ButtonStyle(text_style=ft.TextStyle(size=10))
                 ),
             ], alignment="spaceBetween", vertical_alignment="center"), # Pastikan center vertikal
-            
             ft.Column(
-                ref=self.ref_list_presensi, 
+                ref=self.ref_list_presensi,
                 spacing=0,
-                margin=ft.Margin(top=-5) # Tarik list ke atas
-            ),
+            )
         ], spacing=0),
         bgcolor=C["surface"], 
         border_radius=12, 
@@ -205,10 +232,14 @@ class AdminDashboard:
 
          # 4. WhatsApp Card
         wa_card = ft.Container(
+            ref=self.ref_wa_card,
             content=ft.Column([
-                section_title("📱 Gateway WhatsApp"), 
-                ft.Container(height=10),  
-                wa_status_bar(active=True, total_pesan=total_hari_ini),
+                section_title("📱 Gateway WhatsApp"),
+                ft.Container(height=10),
+                wa_status_bar(
+                    active=True,
+                    total_pesan=total_hari_ini
+                ),
             ]),
             bgcolor=C["surface"], border_radius=12, 
             border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])), 
