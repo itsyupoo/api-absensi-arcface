@@ -177,6 +177,7 @@ class SiswaPresensi:
         self.get_location()
    
     def buka_pilihan_foto(self, e):
+        print("BOTTOMSHEET DIBUKA")
         self.bs = ft.BottomSheet(
             content=ft.Container(
                 padding=20,
