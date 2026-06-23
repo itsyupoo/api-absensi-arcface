@@ -8,6 +8,7 @@ import threading
 import time
 import requests
 import traceback
+import io
 
 class AdminDataSiswa:
     def __init__(self, page, state, go_to):
@@ -111,46 +112,37 @@ class AdminDataSiswa:
         self.list_siswa_controls.extend(filtered_rows)
 
     async def pilih_foto(self, e):
-        print("Tombol pilih foto ditekan")
         files = await self.fp.pick_files(
             allow_multiple=True,
-            file_type=ft.FilePickerFileType.IMAGE
+            file_type=ft.FilePickerFileType.IMAGE,
+            with_data=True
         )
-        print("files")
         if not files:
-            self._snack("❌ Tidak ada foto dipilih", color="red")
+            self._snack(
+                "❌ Tidak ada foto dipilih",
+                color="red"
+            )
             return
         if "selected_images" not in self.state:
             self.state["selected_images"] = []
+
         for f in files:
-            print("PATH =", f.path)
             print("NAME =", f.name)
-            self._snack(
-                f"PATH={f.path}",
-                color="blue"
-            )
-            self.state["selected_images"].append(f.path)
+            print("BYTES =", len(f.bytes))
+
+            self.state["selected_images"].append({
+                "name": f.name,
+                "bytes": f.bytes
+            })
+
         jumlah_baru = len(files)
         jumlah_total = len(self.state["selected_images"])
+
         self._snack(
-           f"✅ {jumlah_baru} foto ditambahkan (total {jumlah_total} foto)",
+            f"✅ {jumlah_baru} foto ditambahkan (total {jumlah_total} foto)",
             color="green"
         )
-        # Update indikator slot
-        for i in range(5):
-            if i < len(files):
-                self.photo_slots[i] = True
 
-                if self.photo_refs[i].current:
-                    self.photo_refs[i].current.content = ft.Text("✅", size=20)
-                    self.photo_refs[i].current.bgcolor = "green"
-
-            else:
-                self.photo_slots[i] = False
-
-                if self.photo_refs[i].current:
-                    self.photo_refs[i].current.content = ft.Text("📷", size=20)
-                    self.photo_refs[i].current.bgcolor = C["surface2"]
         self.page.update()
             
     def proses_simpan(self, e):
@@ -207,16 +199,20 @@ class AdminDataSiswa:
 
                     return
 
-                files.append(
-                    (
-                        "files",
+                files = []
+
+                for img in images:
+
+                    files.append(
                         (
-                            path.split("\\")[-1],
-                            open(path, "rb"),
-                            "image/jpeg"
+                            "files",
+                            (
+                                img["name"],
+                                io.BytesIO(img["bytes"]),
+                                "image/jpeg"
+                            )
                         )
                     )
-                )
 
             data = {
                 "nis_siswa": nis,
@@ -273,11 +269,6 @@ class AdminDataSiswa:
             )
 
         finally:
-
-            # menutup file
-            for _, file_info in files:
-                file_info[1].close()
-
             e.control.disabled = False
             self.page.update()
 
