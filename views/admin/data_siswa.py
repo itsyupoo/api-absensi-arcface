@@ -185,8 +185,18 @@ class AdminDataSiswa:
 
             files = []
 
-            print("SELECTED_IMAGES =", self.state["selected_images"])
+            self._snack(
+                f"DEBUG IMAGES = {images}",
+                color="blue"
+            )
+            print("IMAGES =", images)
             for path in images:
+                print("PATH =", path)
+
+                self._snack(
+                    f"PATH = {path}",
+                    color="orange"
+                )
                 files.append(
                     (
                         "files",
