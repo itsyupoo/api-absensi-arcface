@@ -122,6 +122,10 @@ class AdminDataSiswa:
         if "selected_images" not in self.state:
             self.state["selected_images"] = []
         for f in files:
+            print("FILE =", f)
+            print("PATH =", getattr(f, "path", None))
+            print("NAME =", getattr(f, "name", None))
+            print("BYTES =", getattr(f, "bytes", None))
             self.state["selected_images"].append(f.path)
         jumlah_baru = len(files)
         jumlah_total = len(self.state["selected_images"])
@@ -181,6 +185,7 @@ class AdminDataSiswa:
 
             files = []
 
+            print("SELECTED_IMAGES =", self.state["selected_images"])
             for path in images:
                 files.append(
                     (
