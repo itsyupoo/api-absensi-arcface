@@ -75,7 +75,6 @@ def card(content, padding=16) -> ft.Container:
         margin=ft.Margin(left=0, top=0, right=0, bottom=12),
     )
 
-
 def stat_box(number: str, label: str, color: str = "blue", ref=None) -> ft.Container:
     """Versi ultra-aman untuk debugging."""
     # Pastikan 'C' sudah terdefinisi, atau ganti dengan warna hardcoded untuk tes
@@ -84,7 +83,7 @@ def stat_box(number: str, label: str, color: str = "blue", ref=None) -> ft.Conta
     return ft.Container(
         content=ft.Column(
             controls=[
-                ft.Text(value=number, size=22, weight=ft.FontWeight.BOLD, color=fg),
+                ft.Text(value=number, ref=ref, size=22, weight=ft.FontWeight.BOLD, color=fg),
                 ft.Text(value=label, size=11, color="black"),
             ],
             spacing=0,

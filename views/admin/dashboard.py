@@ -62,6 +62,10 @@ class AdminDashboard:
         while True:
             try:
                 stats = ambil_statistik_dashboard()
+                print("REF TOTAL =", self.ref_total.current)
+                print("REF HADIR =", self.ref_hadir.current)
+                print("REF LAMBAT =", self.ref_lambat.current)
+                print("REF BELUM =", self.ref_belum.current)
                 terbaru = ambil_presensi_terbaru(limit=5)
                 rekap = ambil_rekap_7_hari()
                 total_wa = hitung_wa_terkirim_hari_ini()
@@ -158,7 +162,12 @@ class AdminDashboard:
                     db.close()
 
     def build(self) -> ft.Container:
-        self.page.run_task(self.update_dashboard_periodic)
+        if not self.state.get("dashboard_task_started"):
+            self.state["dashboard_task_started"] = True
+            self.page.run_task(
+                self.update_dashboard_periodic
+            )
+            
         total_hari_ini = hitung_wa_terkirim_hari_ini()
 
         rekap_saat_ini = ambil_rekap_7_hari()
@@ -200,7 +209,7 @@ class AdminDashboard:
             content=ft.Column([
                 ft.Row([section_title("📈 Kehadiran 7 Hari"), chip(bulan_tahun_str, "blue")], alignment="spaceBetween"),
                 ft.Container(height=12),
-                ft.Row(controls=bars_controls, alignment="spaceBetween", vertical_alignment="end"),
+                ft.Row(controls=bars_controls, alignment=ft.MainAxisAlignment.START,  spacing=25, vertical_alignment="end"),
             ]),
             bgcolor=C["surface"], border_radius=12, 
             border=ft.Border(left=ft.BorderSide(1, C["border"]), top=ft.BorderSide(1, C["border"]), right=ft.BorderSide(1, C["border"]), bottom=ft.BorderSide(1, C["border"])),
