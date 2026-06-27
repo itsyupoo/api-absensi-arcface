@@ -1,7 +1,6 @@
 import flet as ft
 from views.login import LoginView
 from views.siswa.dashboard import SiswaDashboard
-from views.siswa.presensi import SiswaPresensi
 from views.siswa.riwayat import SiswaRiwayat
 from views.siswa.profil import SiswaProfil
 from views.admin.dashboard import AdminDashboard
@@ -76,7 +75,6 @@ def main(page: ft.Page):
 def build_siswa_shell(page, state, go_to, active_tab=0):
     tabs = [
         ("Beranda",  ft.Icons.HOME_ROUNDED,      SiswaDashboard),
-        ("Presensi", ft.Icons.CAMERA_ALT_ROUNDED, SiswaPresensi),
         ("Riwayat",  ft.Icons.LIST_ALT_ROUNDED,   SiswaRiwayat),
         ("Profil",   ft.Icons.PERSON_ROUNDED,    SiswaProfil),
     ]
@@ -115,8 +113,8 @@ def build_siswa_shell(page, state, go_to, active_tab=0):
         bgcolor="#0D47A1",
         destinations=[
             ft.NavigationBarDestination(
-            icon=[ft.Icons.HOME_OUTLINED, ft.Icons.CAMERA_ALT_OUTLINED, ft.Icons.LIST_ALT_OUTLINED, ft.Icons.PERSON_OUTLINED][i],
-            selected_icon=[ft.Icons.HOME_ROUNDED, ft.Icons.CAMERA_ALT, ft.Icons.LIST_ALT, ft.Icons.PERSON_ROUNDED][i],
+            icon=[ft.Icons.HOME_OUTLINED, ft.Icons.LIST_ALT_OUTLINED, ft.Icons.PERSON_OUTLINED][i],
+            selected_icon=[ft.Icons.HOME_ROUNDED, ft.Icons.LIST_ALT, ft.Icons.PERSON_ROUNDED][i],
             label=t[0]
         ) for i, t in enumerate(tabs)
     ],

@@ -11,6 +11,16 @@ class SiswaDashboard:
         self.state  = state
         self.go_to  = go_to
 
+    def mulai_presensi(self, e):
+        id_siswa = self.state["user_data"]["id_siswa"]
+        nama = self.state["user_data"]["nama"]
+        url = (
+            "https://sjakhyakirtibackendapi-production.up.railway.app/"
+            f"presensi-web?id_siswa={id_siswa}&nama={nama}"
+        )
+
+        self.page.launch_url(url)
+
     def build(self) -> ft.Container:
         if self.state.get("dashboard_refresh"):
             print("REFRESH DASHBOARD")
@@ -97,7 +107,7 @@ class SiswaDashboard:
             bgcolor="#1A4BD4" if not sudah_hadir else C["surface3"],
             border_radius=12,
             padding=ft.Padding(left=0, top=16, right=0, bottom=16),
-            on_click=None,
+            on_click=self.mulai_presensi if not sudah_hadir else None,
             ink=not sudah_hadir, 
             margin=ft.Margin(0, 0, 0, 0),
             shadow=ft.BoxShadow(
