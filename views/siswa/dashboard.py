@@ -11,15 +11,18 @@ class SiswaDashboard:
         self.state  = state
         self.go_to  = go_to
 
-    def mulai_presensi(self, e):
+    async def mulai_presensi(self, e):
         id_siswa = self.state["user_data"]["id_siswa"]
         nama = self.state["user_data"]["nama"]
+
         url = (
             "https://sjakhyakirtibackendapi-production.up.railway.app/"
             f"presensi-web?id_siswa={id_siswa}&nama={nama}"
         )
 
-        self.page.launch_url(url)
+        print(url)
+
+        await self.page.launch_url(url)
 
     def build(self) -> ft.Container:
         if self.state.get("dashboard_refresh"):
