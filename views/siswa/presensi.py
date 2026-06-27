@@ -420,25 +420,6 @@ class SiswaPresensi:
             ) for lbl, ok in other_checks
         ]
         
-        integrity_card = ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Row([ft.Text("🛡️ Integritas Perangkat", size=13, weight=ft.FontWeight.W_700, color=C["text"])]),
-                    ft.Container(height=8),
-                    gps_row,
-                    *other_rows,
-                    ft.Container(height=8),
-                    ft.Container(
-                        content=ft.Text("Toggle Lokasi GPS (Demo)", size=12, weight=ft.FontWeight.W_600, color=C["text2"], text_align=ft.TextAlign.CENTER),
-                        border_radius=8, border=ft.border.all(1, C["border2"]), padding=ft.Padding(left=14,right=14,top=8,bottom=8),
-                        on_click=self.toggle_geo, ink=True,
-                    ),
-                ],
-                spacing=0,
-            ),
-            bgcolor=C["surface"], border_radius=12, border=ft.border.all(1, C["border"]), padding=16, margin=ft.Margin(bottom=12),
-        )
-
         return ft.Container(
             expand=True,
             bgcolor=C["bg"], # Background asli kamu
@@ -466,7 +447,6 @@ class SiswaPresensi:
                             controls=[
                                 geo_cont,
                                 cam_box,
-                                integrity_card,
                             ]
                         ) 
                     ]

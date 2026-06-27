@@ -111,55 +111,25 @@ class AdminDashboard:
             await asyncio.sleep(5)
 
     def proses_export_excel(self, _):
-        print("TOMBOL EXPORT DIKLIK")
-        # 1. Ambil data dari MySQL
-        db = get_db_connection() # Fungsi koneksi DB kamu
-        if db:
-            try:
-                cursor = db.cursor(dictionary=True)
-                # Query ambil data riwayat presensi 
-                query = """
-                    SELECT c.waktu_absen, s.nama, s.kelas, 
-                           CASE WHEN TIME(c.waktu_absen) <= '07:15:00' THEN 'Hadir' ELSE 'Terlambat' END as status
-                    FROM catatan_kehadiran c 
-                    JOIN dataset_siswa s ON c.id_siswa = s.id_siswa 
-                    ORDER BY c.waktu_absen DESC
-                """
-                cursor.execute(query)
-                data_absen = cursor.fetchall()
-                
-                if not data_absen:
-                    print("Tidak ada data absensi hari ini untuk diekspor.")
-                    return
-                
-                # 2. Ubah data MySQL menjadi DataFrame Pandas
-                df = pd.DataFrame(data_absen)
+        try:
+            self.page.launch_url(
+                "https://sjakhyakirtibackendapi-production.up.railway.app/export-absensi"
+            )
 
-                if 'waktu_absen' in df.columns:
-                    df['waktu_absen'] = df['waktu_absen'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Beri nama kolom yang rapi untuk Excel
-                df.columns = ['Waktu Presensi', 'Nama Siswa', 'Kelas', 'Status Kehadiran']
-                
-                # 3. Simpan menjadi file Excel
-                nama_file = f"Rekap_Absensi_Siswa.xlsx"
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("📥 Mengunduh rekap absensi..."),
+                bgcolor="green"
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
 
-                with pd.ExcelWriter(nama_file, engine='openpyxl') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Absensi Hari Ini')
-                    
-                    # 👉 PROSES AUTO-FIT: Melebarkan kolom secara otomatis berdasarkan teks terpanjang
-                    worksheet = writer.sheets['Absensi Hari Ini']
-                    for col in worksheet.columns:
-                        max_len = max(len(str(cell.value or '')) for cell in col)
-                        col_letter = col[0].column_letter
-                        worksheet.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
-                print(f"🔥 Berhasil! File tersimpan otomatis dan rapi: {nama_file}")
-            except Exception as ex:
-                    print(f"Gagal ekspor: {ex}")
-            finally:
-                    cursor.close()
-                    db.close()
+        except Exception as e:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Gagal mengunduh file: {e}"),
+                bgcolor="red"
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
 
     def build(self) -> ft.Container:
         if not self.state.get("dashboard_task_started"):
