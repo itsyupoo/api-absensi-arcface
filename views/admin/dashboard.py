@@ -110,9 +110,11 @@ class AdminDashboard:
             
             await asyncio.sleep(5)
 
-    def proses_export_excel(self, _):
+    async def proses_export_excel(self, e):
         try:
-            self.page.launch_url(
+            print("EXPORT DIKLIK")
+
+            await self.page.launch_url(
                 "https://sjakhyakirtibackendapi-production.up.railway.app/export-absensi"
             )
 
@@ -123,9 +125,11 @@ class AdminDashboard:
             self.page.snack_bar.open = True
             self.page.update()
 
-        except Exception as e:
+        except Exception as ex:
+            print("ERROR EXPORT =", ex)
+
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Gagal mengunduh file: {e}"),
+                content=ft.Text(f"Gagal mengunduh file: {ex}"),
                 bgcolor="red"
             )
             self.page.snack_bar.open = True
