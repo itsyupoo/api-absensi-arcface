@@ -362,13 +362,7 @@ class SiswaPresensi:
                 )
             )
 
-        step_col = ft.Column(
-            ref=self.step_col_ref,
-            controls=step_rows,
-            spacing=6,
-            visible=False,
-        )
-
+    
         geo_cont = ft.Container(
             ref=self.geo_ref,
             content=geo_indicator(True).content, bgcolor=C["green_dim"], border_radius=8,
@@ -393,32 +387,7 @@ class SiswaPresensi:
                     ft.Text("Ambil Foto dan Verifikasi Kehadiran", size=12, color="black"),
                 ]
             )
-        )
-        
-        gps_row = ft.Container(
-            content=ft.Row(
-                controls=[
-                    ft.Text("GPS Asli (Anti-Mock)", size=12, color=C["text2"], expand=True),
-                    ft.Text(ref=self.gps_text_ref, value="✓ Aman" if not self.is_fake_gps else "✗ Terdeteksi", size=12, weight=ft.FontWeight.W_700, color=C["green"] if not self.is_fake_gps else C["red"]),
-                ]
-            ),
-            border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
-            padding=ft.Padding(top=7,bottom=7),
-        )
-        
-        other_checks = [("VPN Aktif", True)]
-        other_rows = [
-            ft.Container(
-                content=ft.Row(
-                    controls=[
-                        ft.Text(lbl, size=12, color=C["text2"], expand=True),
-                        ft.Text("✓ Aman" if ok else "✗ Terdeteksi", size=12, weight=ft.FontWeight.W_700, color=C["green"] if ok else C["red"]),
-                    ]
-                ),
-                border=ft.Border(bottom=ft.BorderSide(1, C["border"])),
-                padding=ft.Padding(top=7,bottom=7),
-            ) for lbl, ok in other_checks
-        ]
+        )   
         
         return ft.Container(
             expand=True,

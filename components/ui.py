@@ -193,23 +193,47 @@ def avatar(initials: str, size: int = 48) -> ft.Container:
 
     )
 
-def geo_indicator(inside: bool = True) -> ft.Container:
+def geo_indicator(status: str = "belum") -> ft.Container:
     """Indikator status geofencing."""
-    color = C["green"] if inside else C["red"]
-    bg    = C["green_dim"] if inside else C["red_dim"]
-    text  = "Di dalam radius sekolah" if inside else "Di luar radius sekolah!"
-    dist  = "± 48 m" if inside else "± 1.2 km"
+
+    if status == "belum":
+        color = C["text2"]
+        bg = C["surface2"]
+        text = "Belum memeriksa radius sekolah"
+        dist = "-"
+    elif status == "inside":
+        color = C["green"]
+        bg = C["green_dim"]
+        text = "Di dalam radius sekolah"
+        dist = "± 48 m"
+    else:  # outside
+        color = C["red"]
+        bg = C["red_dim"]
+        text = "Di luar radius sekolah!"
+        dist = "± 1.2 km"
+
     return ft.Container(
         content=ft.Row(
             controls=[
                 ft.Container(
-                    width=8, height=8,
+                    width=8,
+                    height=8,
                     border_radius=99,
                     bgcolor=color,
                 ),
-                ft.Text(text, size=12, weight=ft.FontWeight.W_600, color=color,
-                        expand=True),
-                ft.Text(dist, size=11, color=color, opacity=0.7),
+                ft.Text(
+                    text,
+                    size=12,
+                    weight=ft.FontWeight.W_600,
+                    color=color,
+                    expand=True,
+                ),
+                ft.Text(
+                    dist,
+                    size=11,
+                    color=color,
+                    opacity=0.7,
+                ),
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -218,7 +242,7 @@ def geo_indicator(inside: bool = True) -> ft.Container:
         border_radius=8,
         border=ft.border.all(1, f"{color}30"),
         padding=ft.Padding(left=12, right=12, top=8, bottom=8),
-        margin=ft.Margin(left=0, top=0, right=0, bottom=12)
+        margin=ft.Margin(left=0, top=0, right=0, bottom=12),
     )
 
 
